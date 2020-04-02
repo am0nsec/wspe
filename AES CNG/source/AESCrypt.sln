@@ -1,0 +1,37 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.29215.179
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "AESCrypt", "AESCrypt.vcxproj", "{3CB82A71-C96B-475D-B617-25924EB88631}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Custom|x64 = Custom|x64
+		Custom|x86 = Custom|x86
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{3CB82A71-C96B-475D-B617-25924EB88631}.Custom|x64.ActiveCfg = Custom|x64
+		{3CB82A71-C96B-475D-B617-25924EB88631}.Custom|x64.Build.0 = Custom|x64
+		{3CB82A71-C96B-475D-B617-25924EB88631}.Custom|x86.ActiveCfg = Custom|Win32
+		{3CB82A71-C96B-475D-B617-25924EB88631}.Custom|x86.Build.0 = Custom|Win32
+		{3CB82A71-C96B-475D-B617-25924EB88631}.Debug|x64.ActiveCfg = Debug|x64
+		{3CB82A71-C96B-475D-B617-25924EB88631}.Debug|x64.Build.0 = Debug|x64
+		{3CB82A71-C96B-475D-B617-25924EB88631}.Debug|x86.ActiveCfg = Debug|Win32
+		{3CB82A71-C96B-475D-B617-25924EB88631}.Debug|x86.Build.0 = Debug|Win32
+		{3CB82A71-C96B-475D-B617-25924EB88631}.Release|x64.ActiveCfg = Release|x64
+		{3CB82A71-C96B-475D-B617-25924EB88631}.Release|x64.Build.0 = Release|x64
+		{3CB82A71-C96B-475D-B617-25924EB88631}.Release|x86.ActiveCfg = Release|Win32
+		{3CB82A71-C96B-475D-B617-25924EB88631}.Release|x86.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {D52A9CB7-A857-4CD4-BEE2-1CCB19802991}
+	EndGlobalSection
+EndGlobal
