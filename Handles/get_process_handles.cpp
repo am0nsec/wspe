@@ -171,7 +171,7 @@ BOOL GetHandleBasicInformation(HANDLE& hObject, ACCESS_MASK& dwAccessMask, ULONG
 }
 
 INT wmain(int argc, wchar_t* argv[], wchar_t* envp[]) {
-	::wprintf(L"\n[>] Process Hanles Enumeration\n");
+	::wprintf(L"\n[>] Process Handles Enumeration\n");
 	::wprintf(L"   -------------------------------\n\n");
 
 	HRESULT hr = S_OK;
