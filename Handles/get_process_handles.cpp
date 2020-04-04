@@ -206,7 +206,7 @@ INT wmain(int argc, wchar_t* argv[], wchar_t* envp[]) {
 	::wprintf(L"%+-13s", L"References");
 	::wprintf(L"%+-15s", L"Type");
 	::wprintf(L"%s\n\n", L"Name");
-	s
+	
 	// Loop through the handles
 	for (ULONG i = 0; i < pHandleSnapshotInformation->NumberOfHandles; i++) {
 		HANDLE hObject = pHandleSnapshotInformation->Handles[i].HandleValue;
