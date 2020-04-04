@@ -14,8 +14,8 @@ enum PROCESSINFOCLASS {
 
 typedef enum _OBJECT_INFORMATION_CLASS {
 	ObjectBasicInformation = 0,
-	ObjectNameInformation = 1,
-	ObjectTypeInformation = 2
+	ObjectNameInformation  = 1,
+	ObjectTypeInformation  = 2
 } OBJECT_INFORMATION_CLASS;
 
 // https://docs.microsoft.com/en-us/windows/win32/api/subauth/ns-subauth-unicode_string
@@ -31,11 +31,11 @@ typedef struct _OBJECT_NAME_INFORMATION {
 
 // https://docs.microsoft.com/en-us/windows/win32/api/winternl/nf-winternl-ntqueryobject
 typedef struct _PUBLIC_OBJECT_BASIC_INFORMATION {
-	ULONG Attributes;
+	ULONG       Attributes;
 	ACCESS_MASK GrantedAccess;
-	ULONG HandleCount;
-	ULONG PointerCount;
-	ULONG Reserved[10];
+	ULONG       HandleCount;
+	ULONG       PointerCount;
+	ULONG       Reserved[10];
 } PUBLIC_OBJECT_BASIC_INFORMATION, * PPUBLIC_OBJECT_BASIC_INFORMATION;
 
 // https://docs.microsoft.com/en-us/windows/win32/api/winternl/nf-winternl-ntqueryobject
