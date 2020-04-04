@@ -30,6 +30,15 @@ typedef struct _OBJECT_NAME_INFORMATION {
 } OBJECT_NAME_INFORMATION, * POBJECT_NAME_INFORMATION;
 
 // https://docs.microsoft.com/en-us/windows/win32/api/winternl/nf-winternl-ntqueryobject
+typedef struct _PUBLIC_OBJECT_BASIC_INFORMATION {
+	ULONG Attributes;
+	ACCESS_MASK GrantedAccess;
+	ULONG HandleCount;
+	ULONG PointerCount;
+	ULONG Reserved[10];
+} PUBLIC_OBJECT_BASIC_INFORMATION, * PPUBLIC_OBJECT_BASIC_INFORMATION;
+
+// https://docs.microsoft.com/en-us/windows/win32/api/winternl/nf-winternl-ntqueryobject
 typedef struct _PUBLIC_OBJECT_TYPE_INFORMATION {
 	UNICODE_STRING TypeName;
 	ULONG          Reserved[22];
@@ -137,13 +146,38 @@ std::wstring GetHandleName(HANDLE& hObject) {
 	return std::wstring();
 }
 
-INT wmain() {
+BOOL GetHandleBasicInformation(HANDLE& hObject, ACCESS_MASK& dwAccessMask, ULONG& ulReferences) {
+	HRESULT hr = S_OK;
+	ULONG size = 1024;
+	std::vector<BYTE> buffer;
+	buffer.resize(sizeof(PUBLIC_OBJECT_BASIC_INFORMATION));
+	ulReferences = 0;
+	dwAccessMask = 0;
+
+	// Get name of the object
+	hr = NtQueryObject(hObject, ObjectBasicInformation, buffer.data(), buffer.size(), NULL);
+	if (NT_SUCCESS(hr)) {
+		PPUBLIC_OBJECT_BASIC_INFORMATION ObjectBasicInformation = (PPUBLIC_OBJECT_BASIC_INFORMATION)buffer.data();
+		ObjectBasicInformation->HandleCount -= 1;
+		ObjectBasicInformation->PointerCount -= 2;
+
+		ulReferences = ObjectBasicInformation->HandleCount + ObjectBasicInformation->PointerCount;
+		dwAccessMask = ObjectBasicInformation->GrantedAccess;
+		return TRUE;
+	}
+
+	buffer.erase(buffer.begin(), buffer.end());
+	return FALSE;
+}
+
+INT wmain(int argc, wchar_t* argv[], wchar_t* envp[]) {
 	::wprintf(L"\n[>] Process Hanles Enumeration\n");
 	::wprintf(L"   -------------------------------\n\n");
 
 	HRESULT hr = S_OK;
 	BOOL success = TRUE;
 	
+	//DWORD dwProcessId = _wtoi(argv[1]);
 	DWORD dwProcessId = 9540;
 	HANDLE hProcess = ::OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_DUP_HANDLE, FALSE, dwProcessId);
 	if (hProcess == INVALID_HANDLE_VALUE) {
@@ -167,10 +201,12 @@ INT wmain() {
 	::wprintf(L"[>] Number of handles: %d\n\n", pHandleSnapshotInformation->NumberOfHandles);
 
 	// Print table header
-	::wprintf(L"%+-15s", L"Handle");
-	::wprintf(L"%+-20s", L"Type");
+	::wprintf(L"%+-13s", L"Handle");
+	::wprintf(L"%+-13s", L"Acces Mask");
+	::wprintf(L"%+-13s", L"References");
+	::wprintf(L"%+-15s", L"Type");
 	::wprintf(L"%s\n\n", L"Name");
-
+	s
 	// Loop through the handles
 	for (ULONG i = 0; i < pHandleSnapshotInformation->NumberOfHandles; i++) {
 		HANDLE hObject = pHandleSnapshotInformation->Handles[i].HandleValue;
@@ -178,21 +214,25 @@ INT wmain() {
 
 		success = ::DuplicateHandle(hProcess, hObject, ::GetCurrentProcess(), &hDuplicate, 0, FALSE, DUPLICATE_SAME_ACCESS);
 		if (!success) {
-			//::CloseHandle(hObject);
+			::CloseHandle(hDuplicate);
 			continue;
 		}
 
+		ACCESS_MASK dwAccessMask = 0;
+		ULONG ulReferences = 0;
 		std::wstring name = GetHandleName(hDuplicate);
 		std::wstring type = GetHandleType(hDuplicate);
+		GetHandleBasicInformation(hDuplicate, dwAccessMask, ulReferences);
 		if (!name.empty() && !type.empty()) {
-			::wprintf(L"0x%08X%5s", hObject, L" ");
-			::wprintf(L"%+-20s", type.c_str());
+			::wprintf(L"0x%08X%3s", hObject, L" ");
+			::wprintf(L"0x%08X%3s", dwAccessMask, L" ");
+			::wprintf(L"%-13d", ulReferences);
+			::wprintf(L"%+-15s", type.c_str());
 			::wprintf(L"%s\n", name.c_str());
 		}
 
-
-		//::CloseHandle(hDuplicate);
-		//::CloseHandle(hObject);
+		if (hDuplicate)
+			::CloseHandle(hDuplicate);
 	}
 
 	// Cleanup
