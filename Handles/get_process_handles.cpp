@@ -177,8 +177,7 @@ INT wmain(int argc, wchar_t* argv[], wchar_t* envp[]) {
 	HRESULT hr = S_OK;
 	BOOL success = TRUE;
 	
-	//DWORD dwProcessId = _wtoi(argv[1]);
-	DWORD dwProcessId = 9540;
+	DWORD dwProcessId = _wtoi(argv[1]);
 	HANDLE hProcess = ::OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_DUP_HANDLE, FALSE, dwProcessId);
 	if (hProcess == INVALID_HANDLE_VALUE) {
 		::wprintf(L"[-] kernel32!OpenProcess error: %d\n", ::GetLastError());
