@@ -211,7 +211,7 @@ int wmain(int argc, wchar_t* argv[], wchar_t* envp[]) {
 	wprintf(L"   - NumberOfFunctions: %d\n", pImageExportDirectory->NumberOfFunctions);
 
 	DWORD cx;
-	for (cx = 0; cx < pImageExportDirectory->NumberOfFunctions; cx++) {
+	for (cx = 0; cx < pImageExportDirectory->NumberOfNames; cx++) {
 		PCHAR pczFunctionName = (PCHAR)(g_dwModuleBaseAddress + pdwAddressOfNames[cx]);
 		DWORD64 dwFunctionAddress = g_dwModuleBaseAddress + pdwAddressOfFunctions[pwAddressOfNameOrdinales[cx]];
 		printf("   - 0x%016llx %s\n", dwFunctionAddress, pczFunctionName);
