@@ -111,8 +111,6 @@ typedef struct _PEB {
   FUNCTIONS DEFINITION
 --------------------------------------------------------------------*/
 BOOL    PlLoadLibrary(LPCWSTR szDllName);
-DWORD   Hash86(PBYTE str);
-DWORD64 Hash64(PBYTE str);
 
 /*--------------------------------------------------------------------
   GLOBAL VARIABLES
