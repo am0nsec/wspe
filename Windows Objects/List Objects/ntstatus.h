@@ -12,8 +12,11 @@
 #endif
 
 #define OBJ_CASE_INSENSITIVE    0x00000040L
-#define STATUS_BUFFER_TOO_SMALL 0xC0000023
+
+#define STATUS_SUCCESS          0x00000000
 #define STATUS_NO_MORE_ENTRIES  0x8000001AL
+#define STATUS_UNSUCCESSFUL     0xC0000001
+#define STATUS_BUFFER_TOO_SMALL 0xC0000023
 
 #define InitializeObjectAttributes( p, n, a, r, s ) { \
 	(p)->Length = sizeof( OBJECT_ATTRIBUTES );          \
