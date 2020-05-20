@@ -1,6 +1,6 @@
 /*+===================================================================
   File:      list_objects.c
-  Summary:   List objects from a Windows Object Manager directory.
+  Summary:   List named objects from the Windows Object Manager.
   Classes:   N/A
   Functions: N/A
   Origin:    https://github.com/am0nsec
