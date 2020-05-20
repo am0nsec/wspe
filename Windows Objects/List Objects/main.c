@@ -1,9 +1,9 @@
 /*+===================================================================
   File:      main.c
-  Summary:   List objects from a Windows Object Manager directory.
+  Summary:   List named objects from the Windows Object Manager namespace.
   Classes:   N/A
   Functions: N/A
-  Origin:    https://github.com/am0nsec/wspe/new/master/Windows%20Objects
+  Origin:    https://github.com/am0nsec/wspe/blob/master/Windows%20Objects/List%20Objects
 ##
   Author: Paul Laine (@am0nsec)
 ===================================================================+*/
@@ -21,11 +21,13 @@ VOID RtlInitUnicodeString(
 	_In_ PUNICODE_STRING DestinationString,
 	_In_ PCWSTR          SourceString
 );
+
 NTSTATUS WINAPI NtOpenDirectoryObject(
 	_Out_ PHANDLE            DirectoryHandle,
 	_In_  ACCESS_MASK        DesiredAccess,
 	_In_  POBJECT_ATTRIBUTES ObjectAttributes
 );
+
 NTSTATUS WINAPI NtQueryDirectoryObject(
 	_In_      HANDLE  DirectoryHandle,
 	_Out_opt_ PVOID   Buffer,
@@ -35,22 +37,44 @@ NTSTATUS WINAPI NtQueryDirectoryObject(
 	_Inout_   PULONG  Context,
 	_Out_opt_ PULONG  ReturnLength
 );
+
 NTSTATUS WINAPI NtOpenSymbolicLinkObject(
 	_Out_ PHANDLE            LinkHandle,
 	_In_  ACCESS_MASK        DesiredAccess,
 	_In_  POBJECT_ATTRIBUTES ObjectAttributes
 );
+
 NTSTATUS WINAPI NtQuerySymbolicLinkObject(
 	_In_      HANDLE          LinkHandle,
 	_Inout_   PUNICODE_STRING LinkTarget,
 	_Out_opt_ PULONG          ReturnedLength
 );
 
+/*--------------------------------------------------------------------
+  Private Function
+--------------------------------------------------------------------*/
+NTSTATUS GetObjInformation(
+	_Out_ PUNICODE_STRING pObjName,
+	_Out_ PUNICODE_STRING pObjType,
+	_In_  PULONG          puContext
+);
+
+NTSTATUS GetObjSymbolicLinkTarget(
+	_Out_ PUNICODE_STRING pObjSymbolicLinkTarget,
+	_In_  PUNICODE_STRING pObjName
+);
+
+/*--------------------------------------------------------------------
+  Global Variables
+--------------------------------------------------------------------*/
+HANDLE g_hRootDirectory = INVALID_HANDLE_VALUE;
+HANDLE g_hProcessHeap   = INVALID_HANDLE_VALUE;
+
 INT wmain(INT argc, PWCHAR argv[]) {
-	wprintf(L"------------------------------------------------------\n");
-	wprintf(L" List objects from a Windows Object Manager directory\n");
-	wprintf(L"         Copyright (C) Paul Laine (@amonsec)\n");
-	wprintf(L"------------------------------------------------------\n\n");
+	wprintf(L"--------------------------------------------------------------\n");
+	wprintf(L" List named objects from the Windows Object Manager namespace\n");
+	wprintf(L"           Copyright (C) Paul Laine (@am0nsec)\n");
+	wprintf(L"--------------------------------------------------------------\n\n");
 
 	/*--------------------------------------------------------------------
 	  Check user input.
@@ -66,24 +90,19 @@ INT wmain(INT argc, PWCHAR argv[]) {
 	}
 
 	/*--------------------------------------------------------------------
-	  Get a handle to the directory object.
+	  Initialise variables.
 	--------------------------------------------------------------------*/
+	NTSTATUS status = STATUS_UNSUCCESSFUL;
+	g_hProcessHeap = GetProcessHeap();
+
 	UNICODE_STRING RootDirectory = { 0 };
 	RtlInitUnicodeString(&RootDirectory, argv[1]);
 
-	HANDLE hRootDirectory = INVALID_HANDLE_VALUE;
-	HANDLE hProcessHeap = GetProcessHeap();
-
 	OBJECT_ATTRIBUTES ObjAttributes;
-	ObjAttributes.Attributes = OBJ_CASE_INSENSITIVE;
-	ObjAttributes.Length = sizeof(OBJECT_ATTRIBUTES);
-	ObjAttributes.ObjectName = &RootDirectory;
-	ObjAttributes.RootDirectory = NULL;
-	ObjAttributes.SecurityDescriptor = NULL;
-	ObjAttributes.SecurityQualityOfService = NULL;
+	InitializeObjectAttributes(&ObjAttributes, &RootDirectory, OBJ_CASE_INSENSITIVE, NULL, NULL,);
 
-	NTSTATUS status = NtOpenDirectoryObject(&hRootDirectory, DIRECTORY_QUERY | GENERIC_READ, &ObjAttributes);
-	if (!NT_SUCCESS(status) || hRootDirectory == INVALID_HANDLE_VALUE) {
+	status = NtOpenDirectoryObject(&g_hRootDirectory, DIRECTORY_QUERY | GENERIC_READ, &ObjAttributes);
+	if (!NT_SUCCESS(status) || g_hRootDirectory == INVALID_HANDLE_VALUE) {
 		wprintf(L"[-] Error invoking ntdll!NtOpenDirectoryObject (0x%08x)\n", (DWORD)status);
 		return 0x1;
 	}
@@ -91,88 +110,135 @@ INT wmain(INT argc, PWCHAR argv[]) {
 	/*--------------------------------------------------------------------
 	  Parse all objects from the directory.
 	--------------------------------------------------------------------*/
-	POBJECT_DIRECTORY_INFORMATION pObjInformation = NULL;
-	ULONG uStructureSize = 0;
 	ULONG uContext = 0;
+	wprintf(L" %+-25ws   %+-30ws   %ws\n\n", L"Object Type", L"Symbolic Link", L"Object Name");
 
-	wprintf(L" %+-25ws   %+-25ws   %ws\n\n", L"Object Type", L"Symbolic Link", L"Object Name");
 	do {
-		// Get length of the structure
-		status = NtQueryDirectoryObject(hRootDirectory, NULL, 0, TRUE, FALSE, &uContext, &uStructureSize);
-		if (status == STATUS_NO_MORE_ENTRIES)
-			break;
+		UNICODE_STRING ObjSymbolicLink = { 0, 0, NULL };
+		UNICODE_STRING ObjName = { 0, 0, NULL };
+		UNICODE_STRING ObjType = { 0, 0, NULL };
 		
-		if (status != STATUS_BUFFER_TOO_SMALL || uStructureSize == 0) {
-			wprintf(L"[-] Error invoking ntdll!NtQueryDirectoryObject (0x%08x)\n", (DWORD)status);
-			CloseHandle(hRootDirectory);
-			return 0x1;
+		// Get name and type of the object
+		status = GetObjInformation(&ObjName, &ObjType, &uContext);
+		if (!NT_SUCCESS(status))
+			break;
+
+		// Get the symbolic link target if object type is SymbolicLink
+		if (wcscmp(ObjType.Buffer, L"SymbolicLink") == 0) {
+			status = GetObjSymbolicLinkTarget(&ObjSymbolicLink, &ObjName);
+			if (!NT_SUCCESS(status))
+				break;
 		}
 
-		// Get the information about the object
-		pObjInformation = HeapAlloc(hProcessHeap, HEAP_ZERO_MEMORY, uStructureSize);
-		status = NtQueryDirectoryObject(hRootDirectory, pObjInformation, uStructureSize, TRUE, FALSE, &uContext, NULL);
-		if (!NT_SUCCESS(status)) {
-			wprintf(L"[-] Error invoking ntdll!NtQueryDirectoryObject (0x%08x)\n", (DWORD)status);
-			CloseHandle(hRootDirectory);
-			return 0x1;
-		}
+		// Print the information to the console
+		wprintf(L" %+-25ws   %+-30ws   %ws\n", ObjType.Buffer, ObjSymbolicLink.Buffer, ObjName.Buffer);
 
-		/*--------------------------------------------------------------------
-		  Get symbolic link value
-		--------------------------------------------------------------------*/
-		if (pObjInformation->Name.Length != 0 && wcscmp(pObjInformation->TypeName.Buffer, L"SymbolicLink") == 0) {
-			UNICODE_STRING SymbolicObjLinkName;
-			RtlInitUnicodeString(&SymbolicObjLinkName, pObjInformation->Name.Buffer);
-
-			OBJECT_ATTRIBUTES SymbolicObjAttributes;
-			InitializeObjectAttributes(&SymbolicObjAttributes, &SymbolicObjLinkName, OBJ_CASE_INSENSITIVE, hRootDirectory, NULL, NULL);
-
-			HANDLE hLinkHandle = INVALID_HANDLE_VALUE;
-			status = NtOpenSymbolicLinkObject(&hLinkHandle, GENERIC_READ, &SymbolicObjAttributes);
-			if (!NT_SUCCESS(status) || hLinkHandle == INVALID_HANDLE_VALUE) {
-				wprintf(L"[-] Error invoking ntdll!NtOpenSymbolicLinkObject (0x%08x)\n", (DWORD)status);
-				CloseHandle(hRootDirectory);
-				return 0x1;
-			}
-
-			UNICODE_STRING SymbolicObjName = { 0, 0, NULL};
-			ULONG lSizeSymbolicObj = 0;
-			status = NtQuerySymbolicLinkObject(hLinkHandle, &SymbolicObjName, &lSizeSymbolicObj);
-			if (!NT_SUCCESS(status) && status != STATUS_BUFFER_TOO_SMALL) {
-				wprintf(L"[-] Error invoking ntdll!NtQuerySymbolicLinkObject (0x%08x)\n", (DWORD)status);
-				CloseHandle(hRootDirectory);
-				CloseHandle(hLinkHandle);
-				return 0x1;
-			}
-
-			PWCHAR pTempObjName = HeapAlloc(hProcessHeap, HEAP_ZERO_MEMORY, lSizeSymbolicObj);
-			RtlInitUnicodeString(&SymbolicObjName, pTempObjName);
-			SymbolicObjName.MaximumLength = (USHORT)(lSizeSymbolicObj + sizeof(WCHAR));
-			
-			status = NtQuerySymbolicLinkObject(hLinkHandle, &SymbolicObjName, &lSizeSymbolicObj);
-			if (!NT_SUCCESS(status)) {
-				wprintf(L"[-] Error invoking ntdll!NtQuerySymbolicLinkObject (0x%08x)\n", (DWORD)status);
-				CloseHandle(hRootDirectory);
-				CloseHandle(hLinkHandle);
-				return 0x1;
-			}
-
-			wprintf(L" %+-25ws   %+-25ws   %ws\n", pObjInformation->TypeName.Buffer, SymbolicObjName.Buffer, 
-				pObjInformation->Name.Buffer);
-			HeapFree(hProcessHeap, 0, pTempObjName);
-			if (hLinkHandle)
-				CloseHandle(hLinkHandle);
-		}
-		else {
-			wprintf(L" %+-25ws   %+-25ws   %ws\n", pObjInformation->TypeName.Buffer, L"", pObjInformation->Name.Buffer);
-		}
-
-		HeapFree(hProcessHeap, 0, pObjInformation);
-		uStructureSize = 0;
+		// Remove data from the heap
+		if (ObjSymbolicLink.Length != 0)
+			HeapFree(g_hProcessHeap, 0, ObjSymbolicLink.Buffer);
 	} while (status != STATUS_NO_MORE_ENTRIES);
 	
+	wprintf(L"\n\n[>] Total named objects: %d\n\n", uContext);
+
 	// Cleanup and exit
-	if (hRootDirectory)
-		CloseHandle(hRootDirectory);
+	if (g_hRootDirectory)
+		CloseHandle(g_hRootDirectory);
 	return 0x0;
+}
+
+/*F+F+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  Function: GetObjInformation
+  Summary:  Get the name and the type name of the next object in the Object Manager namespace's directory.
+
+  Args:     PUNICODE_STRING pObjName
+			   - Pointer to the UNICODE_STRING that stores the name.
+		    PUNICODE_STRING pObjType
+		       - Pointer to the UNICODE_STRING that stores the type.
+		    PULONG puContext
+		       - Pointer to next element to retrieve.
+
+  Returns:  NTSTATUS
+-----------------------------------------------------------------F-F*/
+NTSTATUS GetObjInformation(PUNICODE_STRING pObjName, PUNICODE_STRING pObjType, PULONG puContext) {
+	POBJECT_DIRECTORY_INFORMATION pObjInformation = NULL;
+	NTSTATUS status = STATUS_UNSUCCESSFUL;
+	ULONG uStructureSize = 0;
+
+	// Get length of the structure
+	status = NtQueryDirectoryObject(g_hRootDirectory, NULL, 0, TRUE, FALSE, puContext, &uStructureSize);
+	if (status == STATUS_NO_MORE_ENTRIES)
+		return STATUS_NO_MORE_ENTRIES;
+
+	if (status != STATUS_BUFFER_TOO_SMALL || uStructureSize == 0) {
+		wprintf(L"[-] Error invoking ntdll!NtQueryDirectoryObject (0x%08x)\n", (DWORD)status);
+		return STATUS_UNSUCCESSFUL;
+	}
+
+	// Get the information about the object
+	pObjInformation = HeapAlloc(g_hProcessHeap, HEAP_ZERO_MEMORY, uStructureSize);
+	status = NtQueryDirectoryObject(g_hRootDirectory, pObjInformation, uStructureSize, TRUE, FALSE, puContext, NULL);
+	if (!NT_SUCCESS(status)) {
+		wprintf(L"[-] Error invoking ntdll!NtQueryDirectoryObject (0x%08x)\n", (DWORD)status);
+		return STATUS_UNSUCCESSFUL;
+	}
+
+	*pObjName = pObjInformation->Name;
+	*pObjType = pObjInformation->TypeName;
+	HeapFree(g_hProcessHeap, 0, pObjInformation);
+
+	return STATUS_SUCCESS;
+}
+
+/*F+F+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  Function: GetObjSymbolicLinkTarget
+  Summary:  Get the name to the object that the symbolic link target.
+
+  Args:     PUNICODE_STRING pObjSymbolicLinkTarget
+			   - Pointer to the UNICODE_STRING that stores the name of the target.
+			PUNICODE_STRING pObjName
+			   - Pointer to the UNICODE_STRING that stores the naem of the symbolic link.
+
+  Returns:  NTSTATUS
+-----------------------------------------------------------------F-F*/
+NTSTATUS GetObjSymbolicLinkTarget(PUNICODE_STRING pObjSymbolicLinkTarget, PUNICODE_STRING pObjName) {
+	NTSTATUS status = STATUS_UNSUCCESSFUL;
+
+	UNICODE_STRING LinkObj;
+	RtlInitUnicodeString(&LinkObj, pObjName->Buffer);
+
+	OBJECT_ATTRIBUTES SymbolicObjAttributes;
+	InitializeObjectAttributes(&SymbolicObjAttributes, &LinkObj, OBJ_CASE_INSENSITIVE, g_hRootDirectory, NULL);
+
+	HANDLE hLinkHandle = INVALID_HANDLE_VALUE;
+	status = NtOpenSymbolicLinkObject(&hLinkHandle, GENERIC_READ, &SymbolicObjAttributes);
+	if (!NT_SUCCESS(status) || hLinkHandle == INVALID_HANDLE_VALUE) {
+		wprintf(L"[-] Error invoking ntdll!NtOpenSymbolicLinkObject (0x%08x)\n", (DWORD)status);
+		return STATUS_UNSUCCESSFUL;
+	}
+
+	UNICODE_STRING SymbolicObjName = { 0, 0, NULL };
+	ULONG lSizeSymbolicObj = 0;
+	status = NtQuerySymbolicLinkObject(hLinkHandle, &SymbolicObjName, &lSizeSymbolicObj);
+	if (!NT_SUCCESS(status) && status != STATUS_BUFFER_TOO_SMALL) {
+		wprintf(L"[-] Error invoking ntdll!NtQuerySymbolicLinkObject (0x%08x)\n", (DWORD)status);
+		CloseHandle(hLinkHandle);
+		return STATUS_UNSUCCESSFUL;
+	}
+
+	SymbolicObjName.Buffer = HeapAlloc(g_hProcessHeap, HEAP_ZERO_MEMORY, lSizeSymbolicObj);
+	SymbolicObjName.Length = lSizeSymbolicObj;
+	SymbolicObjName.MaximumLength = (USHORT)(lSizeSymbolicObj + sizeof(WCHAR));
+
+	status = NtQuerySymbolicLinkObject(hLinkHandle, &SymbolicObjName, &lSizeSymbolicObj);
+	if (!NT_SUCCESS(status)) {
+		wprintf(L"[-] Error invoking ntdll!NtQuerySymbolicLinkObject (0x%08x)\n", (DWORD)status);
+		CloseHandle(hLinkHandle);
+		return STATUS_UNSUCCESSFUL;
+	}
+
+	*pObjSymbolicLinkTarget = SymbolicObjName;
+	if (hLinkHandle)
+		CloseHandle(hLinkHandle);
+
+	return STATUS_SUCCESS;
 }
