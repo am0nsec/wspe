@@ -35,6 +35,16 @@ NTSTATUS WINAPI NtQueryDirectoryObject(
 	_Inout_   PULONG  Context,
 	_Out_opt_ PULONG  ReturnLength
 );
+NTSTATUS WINAPI NtOpenSymbolicLinkObject(
+	_Out_ PHANDLE            LinkHandle,
+	_In_  ACCESS_MASK        DesiredAccess,
+	_In_  POBJECT_ATTRIBUTES ObjectAttributes
+);
+NTSTATUS WINAPI NtQuerySymbolicLinkObject(
+	_In_      HANDLE          LinkHandle,
+	_Inout_   PUNICODE_STRING LinkTarget,
+	_Out_opt_ PULONG          ReturnedLength
+);
 
 INT wmain(INT argc, PWCHAR argv[]) {
 	wprintf(L"------------------------------------------------------\n");
@@ -54,14 +64,14 @@ INT wmain(INT argc, PWCHAR argv[]) {
 		wprintf(L"    - WindowsObjects.exe \\Sessions\\1\\BaseNamedObjects \n\n");
 		return 0x1;
 	}
-	
+
 	/*--------------------------------------------------------------------
 	  Get a handle to the directory object.
 	--------------------------------------------------------------------*/
 	UNICODE_STRING RootDirectory = { 0 };
 	RtlInitUnicodeString(&RootDirectory, argv[1]);
 
-	HANDLE hRootDirectory = NULL;
+	HANDLE hRootDirectory = INVALID_HANDLE_VALUE;
 	HANDLE hProcessHeap = GetProcessHeap();
 
 	OBJECT_ATTRIBUTES ObjAttributes;
@@ -72,7 +82,7 @@ INT wmain(INT argc, PWCHAR argv[]) {
 	ObjAttributes.SecurityDescriptor = NULL;
 	ObjAttributes.SecurityQualityOfService = NULL;
 
-	NTSTATUS status = NtOpenDirectoryObject(&hRootDirectory, DIRECTORY_QUERY, &ObjAttributes);
+	NTSTATUS status = NtOpenDirectoryObject(&hRootDirectory, DIRECTORY_QUERY | GENERIC_READ, &ObjAttributes);
 	if (!NT_SUCCESS(status) || hRootDirectory == INVALID_HANDLE_VALUE) {
 		wprintf(L"[-] Error invoking ntdll!NtOpenDirectoryObject (0x%08x)\n", (DWORD)status);
 		return 0x1;
@@ -85,7 +95,7 @@ INT wmain(INT argc, PWCHAR argv[]) {
 	ULONG uStructureSize = 0;
 	ULONG uContext = 0;
 
-	wprintf(L" %+-32ws %ws\n\n", L"Type", L"Name");
+	wprintf(L" %+-25ws   %+-25ws   %ws\n\n", L"Object Type", L"Symbolic Link", L"Object Name");
 	do {
 		// Get length of the structure
 		status = NtQueryDirectoryObject(hRootDirectory, NULL, 0, TRUE, FALSE, &uContext, &uStructureSize);
@@ -107,7 +117,56 @@ INT wmain(INT argc, PWCHAR argv[]) {
 			return 0x1;
 		}
 
-		wprintf(L" %+-32ws %ws\n", pObjInformation->TypeName.Buffer, pObjInformation->Name.Buffer);
+		/*--------------------------------------------------------------------
+		  Get symbolic link value
+		--------------------------------------------------------------------*/
+		if (pObjInformation->Name.Length != 0 && wcscmp(pObjInformation->TypeName.Buffer, L"SymbolicLink") == 0) {
+			UNICODE_STRING SymbolicObjLinkName;
+			RtlInitUnicodeString(&SymbolicObjLinkName, pObjInformation->Name.Buffer);
+
+			OBJECT_ATTRIBUTES SymbolicObjAttributes;
+			InitializeObjectAttributes(&SymbolicObjAttributes, &SymbolicObjLinkName, OBJ_CASE_INSENSITIVE, hRootDirectory, NULL, NULL);
+
+			HANDLE hLinkHandle = INVALID_HANDLE_VALUE;
+			status = NtOpenSymbolicLinkObject(&hLinkHandle, GENERIC_READ, &SymbolicObjAttributes);
+			if (!NT_SUCCESS(status) || hLinkHandle == INVALID_HANDLE_VALUE) {
+				wprintf(L"[-] Error invoking ntdll!NtOpenSymbolicLinkObject (0x%08x)\n", (DWORD)status);
+				CloseHandle(hRootDirectory);
+				return 0x1;
+			}
+
+			UNICODE_STRING SymbolicObjName = { 0, 0, NULL};
+			ULONG lSizeSymbolicObj = 0;
+			status = NtQuerySymbolicLinkObject(hLinkHandle, &SymbolicObjName, &lSizeSymbolicObj);
+			if (!NT_SUCCESS(status) && status != STATUS_BUFFER_TOO_SMALL) {
+				wprintf(L"[-] Error invoking ntdll!NtQuerySymbolicLinkObject (0x%08x)\n", (DWORD)status);
+				CloseHandle(hRootDirectory);
+				CloseHandle(hLinkHandle);
+				return 0x1;
+			}
+
+			PWCHAR pTempObjName = HeapAlloc(hProcessHeap, HEAP_ZERO_MEMORY, lSizeSymbolicObj);
+			RtlInitUnicodeString(&SymbolicObjName, pTempObjName);
+			SymbolicObjName.MaximumLength = (USHORT)(lSizeSymbolicObj + sizeof(WCHAR));
+			
+			status = NtQuerySymbolicLinkObject(hLinkHandle, &SymbolicObjName, &lSizeSymbolicObj);
+			if (!NT_SUCCESS(status)) {
+				wprintf(L"[-] Error invoking ntdll!NtQuerySymbolicLinkObject (0x%08x)\n", (DWORD)status);
+				CloseHandle(hRootDirectory);
+				CloseHandle(hLinkHandle);
+				return 0x1;
+			}
+
+			wprintf(L" %+-25ws   %+-25ws   %ws\n", pObjInformation->TypeName.Buffer, SymbolicObjName.Buffer, 
+				pObjInformation->Name.Buffer);
+			HeapFree(hProcessHeap, 0, pTempObjName);
+			if (hLinkHandle)
+				CloseHandle(hLinkHandle);
+		}
+		else {
+			wprintf(L" %+-25ws   %+-25ws   %ws\n", pObjInformation->TypeName.Buffer, L"", pObjInformation->Name.Buffer);
+		}
+
 		HeapFree(hProcessHeap, 0, pObjInformation);
 		uStructureSize = 0;
 	} while (status != STATUS_NO_MORE_ENTRIES);
