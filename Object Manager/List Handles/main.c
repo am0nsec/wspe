@@ -31,11 +31,11 @@ NTSTATUS WINAPI NtQueryInformationProcess(
 );
 
 NTSTATUS WINAPI NtQueryObject(
-    _In_opt_  HANDLE                   Handle,
-    _In_      OBJECT_INFORMATION_CLASS ObjectInformationClass,
-    _Out_     PVOID                    ObjectInformation,
-    _In_      ULONG                    ObjectInformationLength,
-    _Out_opt_ PULONG                   ReturnLength
+    _In_opt_  HANDLE Handle,
+    _In_      DWORD  ObjectInformationClass,
+    _Out_     PVOID  ObjectInformation,
+    _In_      ULONG  ObjectInformationLength,
+    _Out_opt_ PULONG ReturnLength
 );
 
 /*--------------------------------------------------------------------
@@ -55,6 +55,12 @@ HRESULT GetObjTypeByHandle(
     _In_  PHANDLE         phObjHandle,
     _Out_ PUNICODE_STRING pObjType,
     _Out_ PVOID*          ppHeapTypeBuffer
+);
+
+NTSTATUS GetObjBasicInformationByHandle(
+    _In_  PHANDLE pObjHandle,
+    _Out_ PACCESS_MASK pAccessMask,
+    _Out_ PDWORD pdwReferenceCount
 );
 
 /*--------------------------------------------------------------------
@@ -131,11 +137,15 @@ INT wmain(INT argc, PWCHAR argv[]) {
 
         ACCESS_MASK dwAccessMask = 0;
         DWORD dwReferenceCount = 0;
-        // TODO get basic obj info 
+        if (GetObjBasicInformationViaHandle(&hDuplicate, &dwAccessMask, &dwReferenceCount) == STATUS_UNSUCCESSFUL) {
+            CloseHandle(hDuplicate);
+            continue;
+        }
 
         // Print information to console
         wprintf(L"0x%08X    0x%08X    %-13d %+-25ws %ws\n", hRemoteHandle, dwAccessMask, dwReferenceCount, ObjType.Buffer, ObjName.Buffer);
 
+        // Cleanup
         if (pHeapTypeBuffer != NULL)
             HeapFree(g_hProcessHeap, 0, pHeapTypeBuffer);
         if (pHeapNameBuffer != NULL)
@@ -146,7 +156,6 @@ INT wmain(INT argc, PWCHAR argv[]) {
     // Cleanup
     HeapFree(g_hProcessHeap, 0, pHandleSnapshotInfo);
     CloseHandle(g_hRemoteProcess);
-    CloseHandle(g_hCurrentProcess);
     return 0x00;
 }
 
@@ -249,5 +258,40 @@ NTSTATUS GetObjTypeByHandle(PHANDLE pObjHandle, PUNICODE_STRING pObjType, PVOID*
     }
 
     *pObjType = ((PPUBLIC_OBJECT_TYPE_INFORMATION)*ppHeapTypeBuffer)->TypeName;
+    return STATUS_SUCCESS;
+}
+
+/*F+F+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  Function: GetObjBasicInformationByHandle
+  Summary:  Get the access mask and reference count of an object with an handle.
+
+  Args:     PHANDLE pObjHandle
+              - Pointer to the handle of the object.
+            PACCESS_MASK pAccessMask
+              - Pointer to a ACCESS_MASK to store the permissions of the object.
+            PDWORD pdwReferenceCount
+              - Pointer to the number of references to the object.
+
+  Returns: NTSTATUS
+-----------------------------------------------------------------F-F*/
+NTSTATUS GetObjBasicInformationByHandle(PHANDLE pObjHandle, PACCESS_MASK pAccessMask, PDWORD pdwReferenceCount) {
+    ULONG lStructureSize = sizeof(PUBLIC_OBJECT_BASIC_INFORMATION);
+    PVOID pBuffer = HeapAlloc(g_hProcessHeap, HEAP_ZERO_MEMORY, lStructureSize);
+
+    NTSTATUS dwNtStatus = NtQueryObject(*pObjHandle, 0, pBuffer, lStructureSize, &lStructureSize);
+    if (!NT_SUCCESS(dwNtStatus) || lStructureSize == 0) {
+        wprintf(L"[-] Error invoking ntdll!NtQueryObject (0x%08x)\n", dwNtStatus);
+        HeapFree(g_hProcessHeap, 0, pBuffer);
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    PPUBLIC_OBJECT_BASIC_INFORMATION pObjectBasicInformation = (PPUBLIC_OBJECT_BASIC_INFORMATION)pBuffer;
+    pObjectBasicInformation->HandleCount -= 1;
+    pObjectBasicInformation->PointerCount -= 2;
+
+    *pAccessMask = pObjectBasicInformation->GrantedAccess;
+    *pdwReferenceCount = pObjectBasicInformation->HandleCount + pObjectBasicInformation->PointerCount;
+
+    HeapFree(g_hProcessHeap, 0, pBuffer);
     return STATUS_SUCCESS;
 }
