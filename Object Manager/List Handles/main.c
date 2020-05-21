@@ -105,7 +105,7 @@ INT wmain(INT argc, PWCHAR argv[]) {
         CloseHandle(g_hRemoteProcess);
         return 0x1;
     }
-    wprintf(L"[>] Number of handles: %d\n\n", pHandleSnapshotInfo->NumberOfHandles);
+    wprintf(L"[>] Number of handles: %d\n\n", (DWORD)pHandleSnapshotInfo->NumberOfHandles);
     
 
     // Loop through all the handles
@@ -137,13 +137,13 @@ INT wmain(INT argc, PWCHAR argv[]) {
 
         ACCESS_MASK dwAccessMask = 0;
         DWORD dwReferenceCount = 0;
-        if (GetObjBasicInformationViaHandle(&hDuplicate, &dwAccessMask, &dwReferenceCount) == STATUS_UNSUCCESSFUL) {
+        if (GetObjBasicInformationByHandle(&hDuplicate, &dwAccessMask, &dwReferenceCount) == STATUS_UNSUCCESSFUL) {
             CloseHandle(hDuplicate);
             continue;
         }
 
         // Print information to console
-        wprintf(L"0x%08X    0x%08X    %-13d %+-25ws %ws\n", hRemoteHandle, dwAccessMask, dwReferenceCount, ObjType.Buffer, ObjName.Buffer);
+        wprintf(L"0x%08llx    0x%08llx    %-13d %+-25ws %ws\n", (DWORD64)hRemoteHandle, (DWORD64)dwAccessMask, dwReferenceCount, ObjType.Buffer, ObjName.Buffer);
 
         // Cleanup
         if (pHeapTypeBuffer != NULL)
