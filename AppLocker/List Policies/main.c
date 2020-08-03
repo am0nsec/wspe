@@ -70,6 +70,10 @@ BOOL GetAppLockerPolicies(PWORD pwAppLockerMode, LPBSTR pbstrLdapPath, LPBSTR pb
 
 	bResult = TRUE;
 failure:
+	if (pIAppIdPolicyHandler) {
+		pIAppIdPolicyHandler->lpVtbl->Release(pIAppIdPolicyHandler);
+		pIAppIdPolicyHandler = NULL;
+	}
 	CoUninitialize();
 	return bResult;
 }
