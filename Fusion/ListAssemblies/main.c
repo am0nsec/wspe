@@ -26,6 +26,10 @@ static HANDLE g_hProcessHeap = INVALID_HANDLE_VALUE;
  * @return Application exit code.
 */
 INT wmain(INT argc, PWCHAR* argv[]) {
+	wprintf(L"\nList .NET Framework Assemblies from the Global Assembly Cache (GAC).\n");
+	wprintf(L"Copyright (C) 2020 Paul Laine (@am0nsec)\n");
+	wprintf(L"https://ntamonsec.blogpost.com\n\n");
+
 	HMODULE hFusionModule = LoadLibraryW(FUSION_MODULE_PATH);
 	if (hFusionModule == NULL) {
 		wprintf(L"[-] Unable to load fusion.dll.\n\n");
@@ -65,7 +69,7 @@ INT wmain(INT argc, PWCHAR* argv[]) {
 		wprintf(L"[-] Unable to create fusion!IAssemblyCache interface.\n\n");
 		return 0x01;
 	}
-	wprintf(L"[+] Interface successfully created: fusion!IAssemblyCache.\n");
+	wprintf(L"[+] Interface successfully created: fusion!IAssemblyCache.\n\n");
 
 	// Parse all Assemblies
 	ParseAllAssemblies(&pIAssemblyEnum, &pIAssemblyCache);
