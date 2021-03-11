@@ -190,28 +190,28 @@ HRESULT STDMETHODCALLTYPE GetGlobalAddressList(
 
 		// Get the data out of the ExchangeUser dispatch interface
 		VARIANT Data = { 0x00 };
-		OupGetDispatchInterfaceProperty(pAddressEntry, L"Name", VT_BSTR, NULL, &Data);
+		OupGetDispatchInterfaceProperty(pExchangeUser, L"Name", VT_BSTR, NULL, &Data);
 		dst->Name = SysAllocString(Data.bstrVal);
 
-		OupGetDispatchInterfaceProperty(pAddressEntry, L"FirstName", VT_BSTR, NULL, &Data);
+		OupGetDispatchInterfaceProperty(pExchangeUser, L"FirstName", VT_BSTR, NULL, &Data);
 		dst->FirstName = SysAllocString(Data.bstrVal);
 
-		OupGetDispatchInterfaceProperty(pAddressEntry, L"LastName", VT_BSTR, NULL, &Data);
+		OupGetDispatchInterfaceProperty(pExchangeUser, L"LastName", VT_BSTR, NULL, &Data);
 		dst->LastName = SysAllocString(Data.bstrVal);
 
-		OupGetDispatchInterfaceProperty(pAddressEntry, L"PrimarySmtpAddress", VT_BSTR, NULL, &Data);
+		OupGetDispatchInterfaceProperty(pExchangeUser, L"PrimarySmtpAddress", VT_BSTR, NULL, &Data);
 		dst->PrimarySmtpAddress = SysAllocString(Data.bstrVal);
 
-		OupGetDispatchInterfaceProperty(pAddressEntry, L"JobTitle", VT_BSTR, NULL, &Data);
+		OupGetDispatchInterfaceProperty(pExchangeUser, L"JobTitle", VT_BSTR, NULL, &Data);
 		dst->JobTitle = SysAllocString(Data.bstrVal);
 
-		OupGetDispatchInterfaceProperty(pAddressEntry, L"Department", VT_BSTR, NULL, &Data);
+		OupGetDispatchInterfaceProperty(pExchangeUser, L"Department", VT_BSTR, NULL, &Data);
 		dst->Department = SysAllocString(Data.bstrVal);
 
-		OupGetDispatchInterfaceProperty(pAddressEntry, L"OfficeLocation", VT_BSTR, NULL, &Data);
+		OupGetDispatchInterfaceProperty(pExchangeUser, L"OfficeLocation", VT_BSTR, NULL, &Data);
 		dst->OfficeLocation = SysAllocString(Data.bstrVal);
 
-		OupGetDispatchInterfaceProperty(pAddressEntry, L"City", VT_BSTR, NULL, &Data);
+		OupGetDispatchInterfaceProperty(pExchangeUser, L"City", VT_BSTR, NULL, &Data);
 		dst->City = SysAllocString(Data.bstrVal);
 
 		dst++;
