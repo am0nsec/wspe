@@ -14,4 +14,7 @@ endif()
 project(wspe VERSION 1.0 LANGUAGES C)
 
 # Office
-add_subdirectory(office/outlook)
+add_subdirectory(Office/outlook)
+
+# Windows Defender
+add_subdirectory(Defender/ExclusionLists)
