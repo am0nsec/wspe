@@ -230,29 +230,23 @@ VOID PrintTime(
 	);
 }
 
-/// <summary>
-/// Display all the information about the kerberos tickets.
-/// </summary>
-/// <param name="Response">Pointer to a Kerberos Cache Response</param>
-VOID PrintTicketInfomration(
-	_In_ CONST PKERB_QUERY_TKT_CACHE_EX_RESPONSE Response
+VOID ShowTicket3(
+	_In_ CONST PKERB_QUERY_TKT_CACHE_EX3_RESPONSE Response
 ) {
-	// List all the tickets
 	printf("Cached Tickets: (%d)\n\n", Response->CountOfTickets);
-
 	HANDLE hProcessHeap = GetProcessHeap();
 
 	for (DWORD cx = 0x00; cx < Response->CountOfTickets; cx++) {
-		KERB_TICKET_CACHE_INFO_EX Ticket = Response->Tickets[cx];
+		KERB_TICKET_CACHE_INFO_EX3 Ticket = Response->Tickets[cx];
 
-		WCHAR* ClientName  = HeapAlloc(hProcessHeap, HEAP_ZERO_MEMORY, Ticket.ClientName.MaximumLength  + 2);
+		WCHAR* ClientName = HeapAlloc(hProcessHeap, HEAP_ZERO_MEMORY, Ticket.ClientName.MaximumLength + 2);
 		WCHAR* ClientRealm = HeapAlloc(hProcessHeap, HEAP_ZERO_MEMORY, Ticket.ClientRealm.MaximumLength + 2);
-		WCHAR* ServerName  = HeapAlloc(hProcessHeap, HEAP_ZERO_MEMORY, Ticket.ServerName.MaximumLength  + 2);
+		WCHAR* ServerName = HeapAlloc(hProcessHeap, HEAP_ZERO_MEMORY, Ticket.ServerName.MaximumLength + 2);
 		WCHAR* ServerRealm = HeapAlloc(hProcessHeap, HEAP_ZERO_MEMORY, Ticket.ServerRealm.MaximumLength + 2);
 
-		RtlCopyMemory(ClientName,  Ticket.ClientName.Buffer,  Ticket.ClientName.MaximumLength);
+		RtlCopyMemory(ClientName, Ticket.ClientName.Buffer, Ticket.ClientName.MaximumLength);
 		RtlCopyMemory(ClientRealm, Ticket.ClientRealm.Buffer, Ticket.ClientRealm.MaximumLength);
-		RtlCopyMemory(ServerName,  Ticket.ServerName.Buffer,  Ticket.ServerName.MaximumLength);
+		RtlCopyMemory(ServerName, Ticket.ServerName.Buffer, Ticket.ServerName.MaximumLength);
 		RtlCopyMemory(ServerRealm, Ticket.ServerRealm.Buffer, Ticket.ServerRealm.MaximumLength);
 
 		// The ID of the cached ticket
@@ -275,29 +269,128 @@ VOID PrintTicketInfomration(
 		PrintTime(L"\tEnd Time:   ", Ticket.EndTime);
 		PrintTime(L"\tRenew Time: ", Ticket.RenewTime);
 
-		// Handle Ex2Message and Ex3Message on newest systems.
-		if (Response->MessageType == KerbQueryTicketCacheEx2Message || Response->MessageType == KerbQueryTicketCacheEx3Message) {
-			KERB_TICKET_CACHE_INFO_EX2 Ticket2 = ((PKERB_QUERY_TKT_CACHE_EX2_RESPONSE)Response)->Tickets[cx];
-			// Session encryption type
-			printf("\tSession Key Type: ");
-			PrintEType(Ticket2.SessionKeyType);
+		// Session encryption type
+		printf("\tSession Key Type: ");
+		PrintEType(Ticket.SessionKeyType);
 
-			if (Response->MessageType == KerbQueryTicketCacheEx3Message) {
-				KERB_TICKET_CACHE_INFO_EX3 Ticket3 = ((PKERB_QUERY_TKT_CACHE_EX3_RESPONSE)Response)->Tickets[cx];
+		// Ticket cache flags
+		wprintf(L"\tCache Flags: 0x%08x -> ", Ticket.CacheFlags);
+		PrintCacheFlags(Ticket.CacheFlags);
 
-				// Ticket cache flags
-				wprintf(L"\tCache Flags: 0x%08x -> ", Ticket3.CacheFlags);
-				PrintCacheFlags(Ticket3.CacheFlags);
+		// KDC that provided the ticket
+		WCHAR* KdcCalled = HeapAlloc(hProcessHeap, HEAP_ZERO_MEMORY, Ticket.KdcCalled.MaximumLength + 2);
+		RtlCopyMemory(KdcCalled, Ticket.KdcCalled.Buffer, Ticket.KdcCalled.MaximumLength);
+		wprintf(L"\tKdc Called: %ws\n\n", KdcCalled);
 
-				// KDC that provided the ticket
-				WCHAR* KdcCalled = HeapAlloc(hProcessHeap, HEAP_ZERO_MEMORY, Ticket3.KdcCalled.MaximumLength + 2);
-				RtlCopyMemory(KdcCalled, Ticket3.KdcCalled.Buffer, Ticket3.KdcCalled.MaximumLength);
-				wprintf(L"\tKdc Called: %ws\n\n", KdcCalled);
+		// Cleanup
+		if (ClientName != NULL)
+			HeapFree(hProcessHeap, 0x00, ClientName);
+		if (ClientRealm != NULL)
+			HeapFree(hProcessHeap, 0x00, ClientRealm);
+		if (ServerName != NULL)
+			HeapFree(hProcessHeap, 0x00, ServerName);
+		if (ServerRealm != NULL)
+			HeapFree(hProcessHeap, 0x00, ServerRealm);
+		if (KdcCalled != NULL)
+			HeapFree(hProcessHeap, 0x00, KdcCalled);
+	}
+}
 
-				if (KdcCalled != NULL)
-					HeapFree(hProcessHeap, 0x00, KdcCalled);
-			}
-		}
+VOID ShowTicket2(
+	_In_ CONST PKERB_QUERY_TKT_CACHE_EX2_RESPONSE Response
+) {
+	// List all the tickets
+	printf("Cached Tickets: (%d)\n\n", Response->CountOfTickets);
+	HANDLE hProcessHeap = GetProcessHeap();
+
+	for (DWORD cx = 0x00; cx < Response->CountOfTickets; cx++) {
+		KERB_TICKET_CACHE_INFO_EX2 Ticket = Response->Tickets[cx];
+
+		WCHAR* ClientName = HeapAlloc(hProcessHeap, HEAP_ZERO_MEMORY, Ticket.ClientName.MaximumLength + 2);
+		WCHAR* ClientRealm = HeapAlloc(hProcessHeap, HEAP_ZERO_MEMORY, Ticket.ClientRealm.MaximumLength + 2);
+		WCHAR* ServerName = HeapAlloc(hProcessHeap, HEAP_ZERO_MEMORY, Ticket.ServerName.MaximumLength + 2);
+		WCHAR* ServerRealm = HeapAlloc(hProcessHeap, HEAP_ZERO_MEMORY, Ticket.ServerRealm.MaximumLength + 2);
+
+		RtlCopyMemory(ClientName, Ticket.ClientName.Buffer, Ticket.ClientName.MaximumLength);
+		RtlCopyMemory(ClientRealm, Ticket.ClientRealm.Buffer, Ticket.ClientRealm.MaximumLength);
+		RtlCopyMemory(ServerName, Ticket.ServerName.Buffer, Ticket.ServerName.MaximumLength);
+		RtlCopyMemory(ServerRealm, Ticket.ServerRealm.Buffer, Ticket.ServerRealm.MaximumLength);
+
+		// The ID of the cached ticket
+		wprintf(L"#%d>", cx);
+
+		// Name of the client and server
+		wprintf(L"\tClient: %ws @ %ws\n", ClientName, ClientRealm);
+		wprintf(L"\tServer: %ws @ %ws\n", ServerName, ServerRealm);
+
+		// Encryption type of the ticket
+		wprintf(L"\tKerbTicket Encryption Type: ");
+		PrintEType(Ticket.EncryptionType);
+
+		// Ticket flags and infomration
+		wprintf(L"\tTicket Flags: 0x%08x -> ", Ticket.TicketFlags);
+		PrintTicketFlags(Ticket.TicketFlags);
+
+		// Timestamps
+		PrintTime(L"\tStart Time: ", Ticket.StartTime);
+		PrintTime(L"\tEnd Time:   ", Ticket.EndTime);
+		PrintTime(L"\tRenew Time: ", Ticket.RenewTime);
+
+		// Session encryption type
+		printf("\tSession Key Type: ");
+		PrintEType(Ticket.SessionKeyType);
+
+		// Cleanup
+		if (ClientName != NULL)
+			HeapFree(hProcessHeap, 0x00, ClientName);
+		if (ClientRealm != NULL)
+			HeapFree(hProcessHeap, 0x00, ClientRealm);
+		if (ServerName != NULL)
+			HeapFree(hProcessHeap, 0x00, ServerName);
+		if (ServerRealm != NULL)
+			HeapFree(hProcessHeap, 0x00, ServerRealm);
+	}
+}
+
+VOID ShowTicket1(
+	_In_ CONST PKERB_QUERY_TKT_CACHE_EX_RESPONSE Response
+) {
+	// List all the tickets
+	printf("Cached Tickets: (%d)\n\n", Response->CountOfTickets);
+	HANDLE hProcessHeap = GetProcessHeap();
+
+	for (DWORD cx = 0x00; cx < Response->CountOfTickets; cx++) {
+		KERB_TICKET_CACHE_INFO_EX Ticket = Response->Tickets[cx];
+
+		WCHAR* ClientName = HeapAlloc(hProcessHeap, HEAP_ZERO_MEMORY, Ticket.ClientName.MaximumLength + 2);
+		WCHAR* ClientRealm = HeapAlloc(hProcessHeap, HEAP_ZERO_MEMORY, Ticket.ClientRealm.MaximumLength + 2);
+		WCHAR* ServerName = HeapAlloc(hProcessHeap, HEAP_ZERO_MEMORY, Ticket.ServerName.MaximumLength + 2);
+		WCHAR* ServerRealm = HeapAlloc(hProcessHeap, HEAP_ZERO_MEMORY, Ticket.ServerRealm.MaximumLength + 2);
+
+		RtlCopyMemory(ClientName, Ticket.ClientName.Buffer, Ticket.ClientName.MaximumLength);
+		RtlCopyMemory(ClientRealm, Ticket.ClientRealm.Buffer, Ticket.ClientRealm.MaximumLength);
+		RtlCopyMemory(ServerName, Ticket.ServerName.Buffer, Ticket.ServerName.MaximumLength);
+		RtlCopyMemory(ServerRealm, Ticket.ServerRealm.Buffer, Ticket.ServerRealm.MaximumLength);
+
+		// The ID of the cached ticket
+		wprintf(L"#%d>", cx);
+
+		// Name of the client and server
+		wprintf(L"\tClient: %ws @ %ws\n", ClientName, ClientRealm);
+		wprintf(L"\tServer: %ws @ %ws\n", ServerName, ServerRealm);
+
+		// Encryption type of the ticket
+		wprintf(L"\tKerbTicket Encryption Type: ");
+		PrintEType(Ticket.EncryptionType);
+
+		// Ticket flags and infomration
+		wprintf(L"\tTicket Flags: 0x%08x -> ", Ticket.TicketFlags);
+		PrintTicketFlags(Ticket.TicketFlags);
+
+		// Timestamps
+		PrintTime(L"\tStart Time: ", Ticket.StartTime);
+		PrintTime(L"\tEnd Time:   ", Ticket.EndTime);
+		PrintTime(L"\tRenew Time: ", Ticket.RenewTime);
 
 		// Cleanup
 		if (ClientName != NULL)
@@ -344,7 +437,7 @@ INT main() {
 	NTSTATUS PackageStatus = STATUS_SUCCESS;
 	ULONG ulBufferSize = 0x00;
 
-	PKERB_QUERY_TKT_CACHE_EX3_RESPONSE CacheResponse = NULL;
+	LPVOID CacheResponse = NULL;
 	KERB_QUERY_TKT_CACHE_REQUEST CacheRequest = { 0x00 };
 	CacheRequest.MessageType = KerbQueryTicketCacheEx3Message;
 	CacheRequest.LogonId.LowPart = 0x00;
@@ -384,13 +477,16 @@ INT main() {
 			);
 			if (!NT_SUCCESS(Status))
 				return EXIT_FAILURE;
+			else
+				ShowTicket1(CacheResponse);
+		}
+		else {
+			ShowTicket2(CacheResponse);
 		}
 	}
-
-	// 4. Print ticket information
-	if (CacheResponse == NULL)
-		return EXIT_FAILURE;
-	PrintTicketInfomration(CacheResponse);
+	else {
+		ShowTicket3(CacheResponse);
+	}
 
 	// x. Cleanup and exit
 exit:

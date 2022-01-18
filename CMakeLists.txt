@@ -10,12 +10,14 @@ if (NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
 	message(FATAL_ERROR "You kids get off my lawn with Linux ...")
 endif()
 
+
 # Dummy project
 project(wspe VERSION 1.0 LANGUAGES C)
 
 # Kerberos
 add_subdirectory(Kerberos/List)
 add_subdirectory(Kerberos/Purge)
+add_subdirectory(Kerberos/GetTicket)
 
 # Office
 add_subdirectory(Office/outlook)
