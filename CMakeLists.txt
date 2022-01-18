@@ -13,6 +13,10 @@ endif()
 # Dummy project
 project(wspe VERSION 1.0 LANGUAGES C)
 
+# Kerberos
+add_subdirectory(Kerberos/List)
+add_subdirectory(Kerberos/Purge)
+
 # Office
 add_subdirectory(Office/outlook)
 
