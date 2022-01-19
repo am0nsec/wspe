@@ -18,6 +18,7 @@ project(wspe VERSION 1.0 LANGUAGES C)
 add_subdirectory(Kerberos/List)
 add_subdirectory(Kerberos/Purge)
 add_subdirectory(Kerberos/GetTicket)
+add_subdirectory(Kerberos/AskTGT)
 
 # Office
 add_subdirectory(Office/outlook)
