@@ -22,7 +22,6 @@ NTSTATUS KerbpFormatTimestamp(
 	return STATUS_SUCCESS;
 }
 
-
 /// <summary>
 /// Get the length associated with an ASN.1 element tag
 /// </summary>
@@ -83,10 +82,11 @@ INT32 KerbpAsnGetEffectiveValueLenght(
 	if (pElement->ValueLength < 0x00) {
 		// Constructed element.
 		if (pElement->SubElements != 0x00) {
-			pElement->ValueLength = 0x00;
+			INT32 len = 0x00;
 			for (DWORD cx = 0x00; cx < pElement->SubElements; cx++) {
-				pElement->ValueLength += KerbpAsnGetEffectiveEncodedLength((ASN_ELEMENT*)&pElement->Sub[cx]);
+				len += KerbpAsnGetEffectiveEncodedLength(&(((ASN_ELEMENT*)pElement->Sub)[cx]));
 			}
+			pElement->ValueLength = len;
 		}
 		// Primitif object
 		else {
@@ -153,7 +153,7 @@ NTSTATUS KerbpAsnMakeConstructed(
 	// Allocate memory for the sub-elements
 	if (NumberOfSubElements != 0x00) {
 		pElement->SubElements = NumberOfSubElements;
-		pElement->Sub = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(ASN_ELEMENT) * NumberOfSubElements);
+		pElement->Sub = calloc(0x01, sizeof(ASN_ELEMENT) * NumberOfSubElements);
 		if (pElement->Sub == NULL)
 			return STATUS_UNSUCCESSFUL;
 		RtlCopyMemory(pElement->Sub, pSubElements, sizeof(ASN_ELEMENT) * NumberOfSubElements);
@@ -183,7 +183,7 @@ NTSTATUS KerbpAsnMakeImplicit(
 			&Out,
 			TagClass,
 			TagValue,
-			pElementIn->Sub,
+			(ASN_ELEMENT*)pElementIn->Sub,
 			pElementIn->SubElements
 		);
 		if (NT_SUCCESS(Status))
@@ -208,6 +208,33 @@ NTSTATUS KerbpAsnMakeImplicit(
 }
 
 /// <summary>
+/// Generate valid ASN.1 integer element.
+/// </summary>
+NTSTATUS KerbpAsnMakeInteger(
+	_Inout_ ASN_ELEMENT* pElement,
+	_In_    LONG         Value
+) {
+	INT32 k = 1;
+	for (ULONG w = (ULONG)Value; w >= 0x80; w >>= 8, k++);
+
+	// Allocate memory
+	LPBYTE v = calloc(1, k);
+	INT32 Length = k;
+	for (ULONG w = (ULONG)Value; k > 0x00; w >>= 8) {
+		v[--k] = (UCHAR)w;
+	}
+
+	return KerbpAsnMakePrimitive(
+		pElement,
+		ASN_TAG_CLASS_UNIVERSAL,
+		ASN_TAG_INTEGER,
+		v,
+		0x00,
+		Length
+	);
+}
+
+/// <summary>
 /// Encode the value of an ASN.1 element
 /// </summary>
 INT32 KerbpAnsEncodeValue(
@@ -221,9 +248,9 @@ INT32 KerbpAnsEncodeValue(
 	if (pElement->ObjectBuffer == NULL) {
 		INT32 k = 0x00;
 		for (DWORD cx = 0x00; cx < pElement->SubElements; cx++) {
-			INT32 slen = KerbpAsnGetEffectiveEncodedLength((ASN_ELEMENT*)&pElement->Sub[cx]);
+			INT32 slen = KerbpAsnGetEffectiveEncodedLength(&(((ASN_ELEMENT*)pElement->Sub)[cx]));
 			RawElementOffset += KerbpAsnEncode(
-				(ASN_ELEMENT*)&pElement->Sub[cx],
+				&(((ASN_ELEMENT*)pElement->Sub)[cx]),
 				Start - k,
 				End - k,
 				RawElementOffset,
@@ -337,13 +364,17 @@ NTSTATUS KerbpEncryptInternal(
 		return STATUS_UNSUCCESSFUL;
 
 	// Get address of the function
-	fnCDLocateCSystem CDLocateCSystem = GetProcAddress(hCryptDLL, "CDLocateCSystem");
+	fnCDLocateCSystem CDLocateCSystem = (fnCDLocateCSystem)GetProcAddress(hCryptDLL, "CDLocateCSystem");
 	if (CDLocateCSystem == NULL)
 		return STATUS_UNSUCCESSFUL;
 
 	// Get the structure
-	LPDWORD AddressOfStructure = NULL;
+	LPVOID AddressOfStructure = NULL;
 	INT32 Result = CDLocateCSystem(EType, &AddressOfStructure);
+	if (AddressOfStructure == NULL)
+		return STATUS_UNSUCCESSFUL;
+
+	// Get the structure.
 	RtlCopyMemory(pECrypt, AddressOfStructure, sizeof(KERBEROS_ECRYPT));
 	return STATUS_SUCCESS;
 }
@@ -352,7 +383,7 @@ NTSTATUS KerbpEncryptInternal(
 /// Encrypt data 
 /// </summary>
 NTSTATUS KerbpEncrypt(
-	_In_  UINT8  EType,
+	_In_  INT32  EType,
 	_In_  INT32  EncReason,
 	_In_  PBYTE  Key,
 	_In_  DWORD  KeyLength,
@@ -387,7 +418,7 @@ NTSTATUS KerbpEncrypt(
 	*BufferOutSize += ECrypt.Size;
 
 	// Allocate memory 
-	*BufferOut = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, *BufferOutSize);
+	*BufferOut = calloc(0x01, *BufferOutSize);
 	if (*BufferOut == NULL) {
 		((fnFinish)ECrypt.Finish)(Context);
 		return STATUS_UNSUCCESSFUL;
@@ -405,18 +436,18 @@ NTSTATUS KerbpEncrypt(
 	return STATUS_SUCCESS;
 }
 
-NTSTATUS KerbGenerateSystemTimestampPAData(
-	_In_  LPCSTR StringKey,
-	_In_  DWORD  StringKeySize,
-	_Out_ PBYTE* EncryptedTimestamp,
-	_Out_ DWORD* EncryptedTimestampSize
+/// <summary>
+/// Generate ASN.1 element for system timestamp.
+/// </summary>
+NTSTATUS KerbpGenerateTimestamp(
+	_Out_ ASN_ELEMENT* Timestamp
 ) {
 	// Get the system time
 	SYSTEMTIME SystemTime = { 0x00 };
 	GetSystemTime(&SystemTime);
 
 	// Convert system time in a formated string
-	CHAR* szSystemTime = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(SYSTEMTIME) + 2);
+	CHAR* szSystemTime = calloc(0x01, sizeof(SYSTEMTIME) + 2);
 	if (szSystemTime == NULL)
 		return STATUS_UNSUCCESSFUL;
 
@@ -435,73 +466,385 @@ NTSTATUS KerbGenerateSystemTimestampPAData(
 	);
 
 	// Make a primitive element for the timestamp
-	ASN_ELEMENT TimeStamp = { 0x00 };
+	ASN_ELEMENT Temp1 = { 0x00 };
 	Status = KerbpAsnMakePrimitive(
-		&TimeStamp,
+		&Temp1,
 		ASN_TAG_CLASS_UNIVERSAL,
 		ASN_TAG_GENERALIZED_TIME,
 		szSystemTime,
 		0x00,
 		0x0F
 	);
-	HeapFree(GetProcessHeap(), 0x00, szSystemTime);
+	free(szSystemTime);
 
 	// Make a constructed element with a list of sub-elements
-	ASN_ELEMENT Sequence1 = { 0x00 };
-	ASN_ELEMENT Sequence2 = { 0x00 };
+	ASN_ELEMENT Temp2 = { 0x00 };
+	ASN_ELEMENT Temp3 = { 0x00 };
 	Status = KerbpAsnMakeConstructed(
-		&Sequence1,
+		&Temp2,
 		ASN_TAG_CLASS_UNIVERSAL,
 		ASN_TAG_SEQUENCE,
-		&TimeStamp,
+		&Temp1,
 		1
 	);
 	Status = KerbpAsnMakeImplicit(
-		&Sequence1,
+		&Temp2,
 		ASN_TAG_CLASS_CONTEXT_SPECIFIC,
 		0x00,
-		&Sequence2
+		&Temp3
 	);
 
 	// Create the final constructed element with the previous data
-	ASN_ELEMENT Final = { 0x00 };
 	Status = KerbpAsnMakeConstructed(
-		&Final,
+		Timestamp,
 		ASN_TAG_CLASS_UNIVERSAL,
 		ASN_TAG_SEQUENCE,
-		&Sequence2,
+		&Temp3,
 		1
 	);
 
-	// Encode the object
-	PBYTE RawObject = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, 0x7fffffff);
-	INT32 RawObjectSize = KerbpAsnEncode(
-		&Final,
-		0x00,
-		0x7fffffff,
-		0x00,
-		RawObject
-	);
-	if (Final.Sub)
-		HeapFree(GetProcessHeap(), 0x00, Final.Sub);
+	return STATUS_SUCCESS;
+}
 
-	// Use the NTLM hash provided to encrypt the timestamp
-	PBYTE Ptr = NULL;
+/// <summary>
+/// Encrypt the timestamp with user NTLM hash.
+/// </summary>
+NTSTATUS KerbpEncryptTimestamp(
+	_In_  LPBYTE          Key,
+	_In_  DWORD           KeySize,
+	_In_  ASN_ELEMENT*    Timestamp,
+	_Out_ ENCRYPTED_DATA* EncryptedData,
+	_Out_ DWORD*          EncryptedDataSize
+) {
+	NTSTATUS Status = STATUS_SUCCESS;
+
+	// Encode the timestamp
+	PBYTE RawTimestamp = calloc(0x01, Timestamp->ObjectLength + 0x10);
+	INT32 RawTimestampSize = KerbpAsnEncode(
+		Timestamp,
+		0x00,
+		Timestamp->ObjectLength + 0x10,
+		0x00,
+		RawTimestamp
+	);
+	if (Timestamp->Sub)
+		free(Timestamp->Sub);
+
+	// Encrypt the data
 	Status = KerbpEncrypt(
-		KERBEROS_ETYPE_RC4_HMAC,
+		EncryptedData->EType,
 		KERBEROS_KEY_USAGE_AS_REQ_PA_ENC_TIMESTAMP,
-		StringKey,
-		StringKeySize,
-		RawObject,
-		RawObjectSize,
-		&Ptr,
-		EncryptedTimestampSize
+		Key,
+		KeySize,
+		RawTimestamp,
+		RawTimestampSize,
+		&EncryptedData->cipher,
+		EncryptedDataSize
 	);
 	if (!NT_SUCCESS(Status)) {
-		// cnealup
+		if (EncryptedData->cipher != NULL)
+			free(EncryptedData->cipher);
+		return STATUS_UNSUCCESSFUL;
 	}
 
 	// Cleanup and exit
-	*EncryptedTimestamp = Ptr;
+	free(RawTimestamp);
+	return Status;
+}
+
+/// <summary>
+/// Encode ASN.1 encrypted-data element.
+/// </summary>
+NTSTATUS KerbpEncodeEncryptedData(
+	_In_  ENCRYPTED_DATA* EncryptedData,
+	_In_  DWORD           EncryptedDataSize,
+	_Out_ PBYTE*          RawData,
+	_Out_ DWORD*          RawDataSize
+) {
+	NTSTATUS Status = STATUS_SUCCESS;
+	
+	ASN_ELEMENT Temp1 = { 0x00 };
+	ASN_ELEMENT Temp2 = { 0x00 };
+	ASN_ELEMENT Temp3 = { 0x00 };
+
+	// etype
+	ASN_ELEMENT EType = { 0x00 };
+	Status = KerbpAsnMakeInteger(&Temp1, EncryptedData->EType);
+	Status = KerbpAsnMakeConstructed(
+		&Temp2,
+		ASN_TAG_CLASS_UNIVERSAL,
+		ASN_TAG_SEQUENCE,
+		&Temp1,
+		0x01
+	);
+	Status = KerbpAsnMakeImplicit(
+		&Temp2,
+		ASN_TAG_CLASS_CONTEXT_SPECIFIC,
+		0x00,
+		&EType
+	);
+
+	// Reset
+	RtlZeroMemory(&Temp1, sizeof(ASN_ELEMENT));
+	RtlZeroMemory(&Temp2, sizeof(ASN_ELEMENT));
+
+	// Encode all the data
+	ASN_ELEMENT Cipher = { 0x00 };
+	Status = KerbpAsnMakePrimitive(
+		&Temp1,
+		ASN_TAG_CLASS_UNIVERSAL,
+		ASN_TAG_OCTET_STRING,
+		EncryptedData->cipher,
+		0x00,
+		EncryptedDataSize
+	);
+	Status = KerbpAsnMakeConstructed(
+		&Temp2,
+		ASN_TAG_CLASS_UNIVERSAL,
+		ASN_TAG_SEQUENCE,
+		&Temp1,
+		0x01
+	);
+	Status = KerbpAsnMakeImplicit(
+		&Temp2,
+		ASN_TAG_CLASS_CONTEXT_SPECIFIC,
+		0x02,
+		&Cipher
+	);
+
+	// Get sequence
+	ASN_ELEMENT Elements[0x02] = { EType, Cipher };
+	Status = KerbpAsnMakeConstructed(
+		&Temp3,
+		ASN_TAG_CLASS_UNIVERSAL,
+		ASN_TAG_SEQUENCE,
+		Elements,
+		0x02
+	);
+
+	// Encode the sequence
+	*RawData = calloc(0x01, Temp3.ObjectLength + 0x10);
+	*RawDataSize = KerbpAsnEncode(
+		&Temp3,
+		0x00,
+		Temp3.ObjectLength + 0x10,
+		0x00,
+		*RawData
+	);
+	if (Temp3.Sub)
+		free(Temp3.Sub);
 	return STATUS_SUCCESS;
+}
+
+/// <summary>
+/// Generate ASN.1 elements for pvno and msg-type
+/// </summary>
+NTSTATUS KerbGeneratePvnoAndType(
+	_Out_ ASN_ELEMENT* Pvno,
+	_Out_ ASN_ELEMENT* MessageType
+) {
+	NTSTATUS Status = STATUS_SUCCESS;
+
+	// Generate the ASN.1 element for the 
+	ASN_ELEMENT Temp1 = { 0x00 };
+	Status = KerbpAsnMakeInteger(&Temp1, 5);
+
+	ASN_ELEMENT Temp2 = { 0x00 };
+	Status = KerbpAsnMakeConstructed(
+		&Temp2,
+		ASN_TAG_CLASS_UNIVERSAL,
+		ASN_TAG_SEQUENCE,
+		&Temp1,
+		0x01
+	);
+	Status = KerbpAsnMakeImplicit(
+		&Temp2,
+		ASN_TAG_CLASS_CONTEXT_SPECIFIC,
+		0x01,
+		Pvno
+	);
+
+	// Generate the ASN.1 element for the
+	ASN_ELEMENT Temp3 = { 0x00 };
+	ASN_ELEMENT Temp4 = { 0x00 };
+	Status = KerbpAsnMakeInteger(&Temp3, KERBEROS_MESSAGE_TYPE_AS_REQ);
+	Status = KerbpAsnMakeConstructed(
+		&Temp4,
+		ASN_TAG_CLASS_UNIVERSAL,
+		ASN_TAG_SEQUENCE,
+		&Temp3,
+		0x01
+	);
+	Status = KerbpAsnMakeImplicit(
+		&Temp4,
+		ASN_TAG_CLASS_CONTEXT_SPECIFIC,
+		0x02,
+		MessageType
+	);
+
+	return Status;
+}
+
+/// <summary>
+/// Generate the EncryptedData ASN.1 element containing the encrypted timestamp.
+/// </summary>
+NTSTATUS KerbGenerateEncryptedData(
+	_In_  LPCSTR       StringKey,
+	_In_  DWORD        StringKeySize,
+	_Out_ ASN_ELEMENT* pElement 
+) {
+	NTSTATUS Status = STATUS_SUCCESS;
+
+	ASN_ELEMENT Temp1 = { 0x00 };
+	ASN_ELEMENT Temp2 = { 0x00 };
+
+	// padata-type
+	ASN_ELEMENT PdataType = { 0x00 };
+	Status = KerbpAsnMakeInteger(&Temp1, KERBEROS_PDATA_TYPE_ENC_TIMESTAMP);
+	Status = KerbpAsnMakeConstructed(
+		&Temp2,
+		ASN_TAG_CLASS_UNIVERSAL,
+		ASN_TAG_SEQUENCE,
+		&Temp1,
+		0x01
+	);
+	Status = KerbpAsnMakeImplicit(
+		&Temp2,
+		ASN_TAG_CLASS_CONTEXT_SPECIFIC,
+		0x01,
+		&PdataType
+	);
+
+	// Reset
+	RtlZeroMemory(&Temp1, sizeof(ASN_ELEMENT));
+	RtlZeroMemory(&Temp2, sizeof(ASN_ELEMENT));
+
+	// Generate the timestamp
+	ASN_ELEMENT Timestamp = { 0x00 };
+	Status = KerbpGenerateTimestamp(&Timestamp);
+
+	// Encrypt the timestamp
+	DWORD EncryptedDataSize = 0x00;
+	ENCRYPTED_DATA EncryptedData = { 0x00 };
+	EncryptedData.EType = KERBEROS_ETYPE_RC4_HMAC;
+
+	Status = KerbpEncryptTimestamp(
+		StringKey,
+		StringKeySize,
+		&Timestamp,
+		&EncryptedData,
+		&EncryptedDataSize
+	);
+
+	// Get encoded data
+	PBYTE RawEncryptedData = NULL;
+	DWORD RawEncryptedDataSize = 0x00;
+	KerbpEncodeEncryptedData(
+		&EncryptedData,
+		EncryptedDataSize,
+		&RawEncryptedData,
+		&RawEncryptedDataSize
+	);
+
+	// padata-value
+	ASN_ELEMENT PdataValue = { 0x00 };
+	Status = KerbpAsnMakePrimitive(
+		&Temp1,
+		ASN_TAG_CLASS_UNIVERSAL,
+		ASN_TAG_OCTET_STRING,
+		RawEncryptedData,
+		0x00,
+		RawEncryptedDataSize
+	);
+	Status = KerbpAsnMakeConstructed(
+		&Temp2,
+		ASN_TAG_CLASS_UNIVERSAL,
+		ASN_TAG_SEQUENCE,
+		&Temp1,
+		0x01
+	);
+	Status = KerbpAsnMakeImplicit(
+		&Temp2,
+		ASN_TAG_CLASS_CONTEXT_SPECIFIC,
+		0x02,
+		&PdataValue
+	);
+
+	// Create sequence for both element.
+	ASN_ELEMENT Elements[0x02] = { PdataType, PdataValue };
+	return KerbpAsnMakeConstructed(
+		pElement,
+		ASN_TAG_CLASS_UNIVERSAL,
+		ASN_TAG_SEQUENCE,
+		Elements,
+		0x02
+	);
+}
+
+/// <summary>
+/// Generate the PacRequest ASN.1 element. 
+/// </summary>
+NTSTATUS KerbGeneratePac(
+	_Out_ ASN_ELEMENT* pElement
+) {
+	NTSTATUS Status = STATUS_SUCCESS;
+
+	ASN_ELEMENT Temp1 = { 0x00 };
+	ASN_ELEMENT Temp2 = { 0x00 };
+
+	// padata-type
+	ASN_ELEMENT PdataType = { 0x00 };
+	Status = KerbpAsnMakeInteger(&Temp1, KERBEROS_PDATA_TYPE_PA_PAC_REQUEST);
+	Status = KerbpAsnMakeConstructed(
+		&Temp2,
+		ASN_TAG_CLASS_UNIVERSAL,
+		ASN_TAG_SEQUENCE,
+		&Temp1,
+		0x01
+	);
+	Status = KerbpAsnMakeImplicit(
+		&Temp2,
+		ASN_TAG_CLASS_CONTEXT_SPECIFIC,
+		0x01,
+		&PdataType
+	);
+
+	// Reset
+	RtlZeroMemory(&Temp1, sizeof(ASN_ELEMENT));
+	RtlZeroMemory(&Temp2, sizeof(ASN_ELEMENT));
+
+	// Generate the PAC request.
+	ASN_ELEMENT PdataValue = { 0x00 };
+	PBYTE Blob[0x07] = { 0x30, 0x05, 0xa0, 0x03, 0x01, 0x01, 0x01 };
+	Status = KerbpAsnMakePrimitive(
+		&Temp1,
+		ASN_TAG_CLASS_UNIVERSAL,
+		ASN_TAG_OCTET_STRING,
+		Blob,
+		0x00,
+		0x07
+	);
+	Status = KerbpAsnMakeConstructed(
+		&Temp2,
+		ASN_TAG_CLASS_UNIVERSAL,
+		ASN_TAG_SEQUENCE,
+		&Temp1,
+		0x01
+	);
+	Status = KerbpAsnMakeImplicit(
+		&Temp2,
+		ASN_TAG_CLASS_CONTEXT_SPECIFIC,
+		0x02,
+		&PdataValue
+	);
+
+	// Create sequence for both element.
+	ASN_ELEMENT Elements[0x02] = { PdataType, PdataValue };
+	return KerbpAsnMakeConstructed(
+		pElement,
+		ASN_TAG_CLASS_UNIVERSAL,
+		ASN_TAG_SEQUENCE,
+		Elements,
+		0x02
+	);
 }

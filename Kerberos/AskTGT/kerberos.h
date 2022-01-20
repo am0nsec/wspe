@@ -31,47 +31,6 @@
 #define KERBEROS_KEY_USAGE_KRB_NON_KERB_CKSUM_SALT        17
 #define KERBEROS_KEY_USAGE_PA_S4U_X509_USER               26
 
-
-// https://datatracker.ietf.org/doc/html/rfc4120#section-7.5.2
-//Padata and Data Type    Padata-type   Comment
-//                         Value
-//PA-TGS-REQ                  1
-//PA-ENC-TIMESTAMP            2
-//PA-PW-SALT                  3
-//[reserved]                  4
-//PA-ENC-UNIX-TIME            5        (deprecated)
-//PA-SANDIA-SECUREID          6
-//PA-SESAME                   7
-//PA-OSF-DCE                  8
-//PA-CYBERSAFE-SECUREID       9
-//PA-AFS3-SALT                10
-//PA-ETYPE-INFO               11
-//PA-SAM-CHALLENGE            12       (sam/otp)
-//PA-SAM-RESPONSE             13       (sam/otp)
-//PA-PK-AS-REQ_OLD            14       (pkinit)
-//PA-PK-AS-REP_OLD            15       (pkinit)
-//PA-PK-AS-REQ                16       (pkinit)
-//PA-PK-AS-REP                17       (pkinit)
-//PA-ETYPE-INFO2              19       (replaces pa-etype-info)
-//PA-USE-SPECIFIED-KVNO       20
-//PA-SAM-REDIRECT             21       (sam/otp)
-//PA-GET-FROM-TYPED-DATA      22       (embedded in typed data)
-//TD-PADATA                   22       (embeds padata)
-//PA-SAM-ETYPE-INFO           23       (sam/otp)
-//PA-ALT-PRINC                24       (crawdad@fnal.gov)
-//PA-SAM-CHALLENGE2           30       (kenh@pobox.com)
-//PA-SAM-RESPONSE2            31       (kenh@pobox.com)
-//PA-EXTRA-TGT                41       Reserved extra TGT
-//TD-PKINIT-CMS-CERTIFICATES  101      CertificateSet from CMS
-//TD-KRB-PRINCIPAL            102      PrincipalName
-//TD-KRB-REALM                103      Realm
-//TD-TRUSTED-CERTIFIERS       104      from PKINIT
-//TD-CERTIFICATE-INDEX        105      from PKINIT
-//TD-APP-DEFINED-ERROR        106      application specific
-//TD-REQ-NONCE                107      INTEGER
-//TD-REQ-SEQ                  108      INTEGER
-//PA-PAC-REQUEST              128      (jbrezak@exchange.microsoft.com)
-
 #define KERBEROS_PDATA_TYPE_NONE                     0
 #define KERBEROS_PDATA_TYPE_TGS_REQ                  1
 #define KERBEROS_PDATA_TYPE_AP_REQ                   1
@@ -113,23 +72,6 @@
 #define KERBEROS_PDATA_TYPE_PK_AS_09_BINDING         132
 #define KERBEROS_PDATA_TYPE_CLIENT_CANONICALIZED     133
 
-//https://datatracker.ietf.org/doc/html/rfc4120#section-7.5.7
-//Message Type   Value  Meaning
-//
-//KRB_AS_REQ      10    Request for initial authentication
-//KRB_AS_REP      11    Response to KRB_AS_REQ request
-//KRB_TGS_REQ     12    Request for authentication based on TGT
-//KRB_TGS_REP     13    Response to KRB_TGS_REQ request
-//KRB_AP_REQ      14    Application request to server
-//KRB_AP_REP      15    Response to KRB_AP_REQ_MUTUAL
-//KRB_RESERVED16  16    Reserved for user-to-user krb_tgt_request
-//KRB_RESERVED17  17    Reserved for user-to-user krb_tgt_reply
-//KRB_SAFE        20    Safe (checksummed) application message
-//KRB_PRIV        21    Private (encrypted) application message
-//KRB_CRED        22    Private (encrypted) message to forward
-//                        credentials
-//KRB_ERROR       30    Error response
-
 #define KERBEROS_MESSAGE_TYPE_AS_REQ   10
 #define KERBEROS_MESSAGE_TYPE_AS_REP   11
 #define KERBEROS_MESSAGE_TYPE_TGS_REQ  12
@@ -142,30 +84,6 @@
 #define KERBEROS_MESSAGE_TYPE_PRIV     21
 #define KERBEROS_MESSAGE_TYPE_CRED     22
 #define KERBEROS_MESSAGE_TYPE_ERROR    30
-
-// https://datatracker.ietf.org/doc/html/rfc3961#section-8
-//     encryption type                etype      section or comment
-//     -----------------------------------------------------------------
-//     des-cbc-crc                        1             6.2.3
-//     des-cbc-md4                        2             6.2.2
-//     des-cbc-md5                        3             6.2.1
-//     [reserved]                         4
-//     des3-cbc-md5                       5
-//     [reserved]                         6
-//     des3-cbc-sha1                      7
-//     dsaWithSHA1-CmsOID                 9           (pkinit)
-//     md5WithRSAEncryption-CmsOID       10           (pkinit)
-//     sha1WithRSAEncryption-CmsOID      11           (pkinit)
-//     rc2CBC-EnvOID                     12           (pkinit)
-//     rsaEncryption-EnvOID              13   (pkinit from PKCS#1 v1.5)
-//     rsaES-OAEP-ENV-OID                14   (pkinit from PKCS#1 v2.0)
-//     des-ede3-cbc-Env-OID              15           (pkinit)
-//     des3-cbc-sha1-kd                  16              6.3
-//     aes128-cts-hmac-sha1-96           17          [KRB5-AES]
-//     aes256-cts-hmac-sha1-96           18          [KRB5-AES]
-//     rc4-hmac                          23          (Microsoft)
-//     rc4-hmac-exp                      24          (Microsoft)
-//     subkey-keymaterial                65     (opaque; PacketCable)
 
 #define KERBEROS_ETYPE_DES_CBC_CRC                     1
 #define KERBEROS_ETYPE_DES_CBC_MD4                     2
@@ -215,7 +133,6 @@
 typedef struct _ASN_ELEMENT {
     INT32 TagValue;       // Tag of the element. Look at ASN_TAG_*
     INT32 TagClass;       // Tag class of the elemnt. Look at ASN_TAG_CLASS_*
-    PBYTE Value;          // Value of the element
 
     // Sub elements if composed
     PBYTE Sub;            // List of sub ASN.1 element
@@ -230,59 +147,20 @@ typedef struct _ASN_ELEMENT {
     BOOLEAN Encoded;      // Whether the object has been already encoded.
 }ASN_ELEMENT, *PASN_ELEMENT;
 
-
-///PA-DATA         ::= SEQUENCE {
-///        -- NOTE: first tag is [1], not [0]
-///        padata-type     [1] Int32,
-///        padata-value    [2] OCTET STRING -- might be encoded AP-REQ
+///EncryptedData::= SEQUENCE {
+///    etype[0] Int32 -- EncryptionType --,
+///    kvno[1] UInt32 OPTIONAL,
+///    cipher[2] OCTET STRING -- ciphertext
 ///}
-typedef struct _PA_DATA {
-    UINT32 Type;
-    LPVOID Value;
-} PA_DATA, * PPA_DATA;
+typedef struct _ENCRYPTED_DATA {
+    INT32  EType;
+    UINT32 kvno;
+    LPVOID cipher;
+} ENCRYPTED_DATA, *PENCRYPTED_DATA;
 
-///KDC-REQ-BODY::= SEQUENCE {
-///    kdc-options[0] KDCOptions,
-///    cname[1] PrincipalName OPTIONAL
-///                                -- Used only in AS-REQ --,
-///    realm[2] Realm
-///                                -- Server's realm
-///                                -- Also client's in AS-REQ --,
-///    sname[3] PrincipalName OPTIONAL,
-///    from[4] KerberosTime OPTIONAL,
-///    till[5] KerberosTime,
-///    rtime[6] KerberosTime OPTIONAL,
-///    nonce[7] UInt32,
-///    etype[8] SEQUENCE OF Int32   -- EncryptionType
-///                                 -- in preference order --,
-///    addresses[9] HostAddresses OPTIONAL,
-///    enc-authorization-data[10] EncryptedData OPTIONAL
-///                                 -- AuthorizationData --,
-///    additional-tickets[11] SEQUENCE OF Ticket OPTIONAL
-///                                 -- NOTE: not empty
-///}
-typedef struct _KERBEROS_KDC_REQ_BODY {
-    LPVOID Todo;
-} KERBEROS_KDC_REQ_BODY, *PKERBEROS_KDC_REQ_BODY;
-
-
-///AS-REQ          ::= [APPLICATION 10] KDC-REQ
-///KDC-REQ         ::= SEQUENCE {
-///    -- NOTE: first tag is [1], not [0]
-///    pvno            [1] INTEGER (5) ,
-///    msg-type        [2] INTEGER (10 -- AS),
-///    padata          [3] SEQUENCE OF PA-DATA OPTIONAL
-///                       -- NOTE: not empty --,
-///    req-body        [4] KDC-REQ-BODY
-///}
-typedef struct _KERBEROS_AS_REQ {
-    UINT64  pvno;
-    UINT64  msg_type;
-
-
-
-} KERBEROS_AS_REQ, * PKERBEROS_AS_REQ;
-
+/// <summary>
+/// Used in conjunction with cryptdll.dll
+/// </summary>
 typedef struct _KERBEROS_ECRYPT {
     INT32  Type0;
     INT32  BlockSize;
@@ -303,9 +181,6 @@ typedef struct _KERBEROS_ECRYPT {
     LPVOID Unknown1Null;
     LPVOID Unknown2Null;
 } KERBEROS_ECRYPT, *PKERBEROS_ECRYPT;
-
-
-#endif// !__TGT_H_GUARD__
 
 //-------------------------------------------------------------------------------------------------//
 // External functions
@@ -337,11 +212,19 @@ typedef INT32(STDMETHODCALLTYPE* fnFinish)(
 //-------------------------------------------------------------------------------------------------//
 // Public functions
 //-------------------------------------------------------------------------------------------------//
-NTSTATUS KerbGenerateSystemTimestampPAData(
-    _In_  LPCSTR StringKey,
-    _In_  DWORD  StringKeySize,
-    _Out_ PBYTE* EncryptedTimestamp,
-    _Out_ DWORD* EncryptedTimestampSize
+NTSTATUS KerbGeneratePvnoAndType(
+    _Out_ ASN_ELEMENT* Pvno,
+    _Out_ ASN_ELEMENT* MessageType
+);
+
+NTSTATUS KerbGenerateEncryptedData(
+    _In_  LPCSTR       StringKey,
+    _In_  DWORD        StringKeySize,
+    _Out_ ASN_ELEMENT* EncryptedData
+);
+
+NTSTATUS KerbGeneratePac(
+    _Out_ ASN_ELEMENT* pElement
 );
 
 //-------------------------------------------------------------------------------------------------//
@@ -380,9 +263,74 @@ NTSTATUS KerbpAsnMakeConstructed(
     _In_    CONST DWORD        NumberOfSubElements
 );
 
+NTSTATUS KerbpAsnMakeImplicit(
+    _In_  ASN_ELEMENT* pElementIn,
+    _In_  CONST INT8   TagClass,
+    _In_  CONST INT8   TagValue,
+    _Out_ ASN_ELEMENT* pElementOut
+);
+
+NTSTATUS KerbpAsnMakeInteger(
+    _Inout_ ASN_ELEMENT* pElement,
+    _In_    LONG         Value
+);
+
+INT32 KerbpAnsEncodeValue(
+    _In_  ASN_ELEMENT* pElement,
+    _In_  INT32        Start,
+    _In_  INT32        End,
+    _In_  INT32        RawElementOffset,
+    _Out_ PBYTE        pRawElement
+);
+
+INT32 KerbpAsnEncode(
+    _In_  ASN_ELEMENT* pElement,
+    _In_  INT32        Start,
+    _In_  INT32        End,
+    _In_  DWORD        RawElementOffset,
+    _Out_ PBYTE        pRawElement
+);
+
+NTSTATUS KerbpEncryptInternal(
+    _In_  INT32            EType,
+    _Out_ KERBEROS_ECRYPT* pECrypt
+);
+
+NTSTATUS KerbpEncrypt(
+    _In_  INT32  EType,
+    _In_  INT32  EncReason,
+    _In_  PBYTE  Key,
+    _In_  DWORD  KeyLength,
+    _In_  PBYTE  BufferIn,
+    _In_  DWORD  BufferInSize,
+    _Out_ PBYTE* BufferOut,
+    _Out_ DWORD* BufferOutSize
+);
+
+NTSTATUS KerbpGenerateTimestamp(
+    _Out_ ASN_ELEMENT* Timestamp
+);
+
+NTSTATUS KerbpEncryptTimestamp(
+    _In_  LPBYTE          Key,
+    _In_  DWORD           KeySize,
+    _In_  ASN_ELEMENT* Timestamp,
+    _Out_ ENCRYPTED_DATA* EncryptedData,
+    _Out_ DWORD* EncryptedDataSize
+);
+
+NTSTATUS KerbpEncodeEncryptedData(
+    _In_  ENCRYPTED_DATA* EncryptedData,
+    _In_  DWORD           EncryptedDataSize,
+    _Out_ PBYTE* RawData,
+    _Out_ DWORD* RawDataSize
+);
+
 NTSTATUS KerbpFormatTimestamp(
     _Out_ CHAR** pszBuffer,
     _In_  CONST DWORD dwBufferSize,
     _In_  CONST CHAR* Format,
     _In_  ...
 );
+
+#endif// !__TGT_H_GUARD__

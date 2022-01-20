@@ -23,12 +23,12 @@
 /// <param name="DCInformation">Pointer to the PDOMAIN_CONTROLLER_INFOW pointer of structure</param>
 /// <returns>Whether the function executed successfully</returns>
 NTSTATUS GetDomainControllerInformation(
-	_In_opt_ LPCWSTR                   ServerName,
-	_In_opt_ LPCWSTR                   DomainName,
-	_Inout_  PDOMAIN_CONTROLLER_INFOW* DCInformation
+	_In_opt_ LPCSTR                    ServerName,
+	_In_opt_ LPCSTR                    DomainName,
+	_Inout_  PDOMAIN_CONTROLLER_INFOA* DCInformation
 ) {
 	// Get the informations
-	DWORD Status = DsGetDcNameW(
+	DWORD Status = DsGetDcNameA(
 		ServerName,
 		DomainName,
 		NULL,
@@ -40,32 +40,38 @@ NTSTATUS GetDomainControllerInformation(
 		return STATUS_UNSUCCESSFUL;
 	
 	// Fix the domain name and ip address to remove the "\\"
-	SIZE_T Size1 = wcslen((*DCInformation)->DomainControllerName);
-	SIZE_T Size2 = wcslen((*DCInformation)->DomainControllerAddress);
+	SIZE_T Size1 = strlen((*DCInformation)->DomainControllerName);
+	SIZE_T Size2 = strlen((*DCInformation)->DomainControllerAddress);
 
-	RtlCopyMemory((*DCInformation)->DomainControllerName, (*DCInformation)->DomainControllerName + 2, Size1 - 4);
-	RtlCopyMemory((*DCInformation)->DomainControllerAddress, (*DCInformation)->DomainControllerAddress + 2, Size2 - 4);
+	RtlCopyMemory((*DCInformation)->DomainControllerName, (*DCInformation)->DomainControllerName + 2, Size1 - 2);
+	RtlCopyMemory((*DCInformation)->DomainControllerAddress, (*DCInformation)->DomainControllerAddress + 2, Size2 - 2);
 	return STATUS_SUCCESS;
 }
 
-//NTSTATUS GetEncodedSystemTimestamp(
-//	_Out_ PBYTE *ppEncodedTimestamp,
-//	_Out_ DWORD *pEncodedTimestampSize
-//) {
-//
-//
-//	//StringCchVPrintfW()
-//	
-//}
-
-NTSTATUS CreateRawKerberosASRequest(
-	_In_  PKERBEROS_AS_REQ Request,
-	_Out_ LPBYTE           RawRequest,
-	_Out_ DWORD            RawRequestSize
+NTSTATUS GenerateASRequest(
+	_In_ PCSTR Key,
+	_In_ DWORD KeySize
 ) {
+	// 1. PVNOP and MSG-TYPE
+	ASN_ELEMENT Pvno = { 0x00 };
+	ASN_ELEMENT MessageType = { 0x00 };
+	KerbGeneratePvnoAndType(&Pvno, &MessageType);
+
+	// 2 Generate and encrypt the timestamp
+	ASN_ELEMENT EncryptedData = { 0x00 };
+	KerbGenerateEncryptedData(Key, KeySize, &EncryptedData);
+
+	// 3 Generate the PAC element
+	ASN_ELEMENT Pac = { 0x00 };
+	KerbGeneratePac(&Pac);
+
+	// 4 Generate REQ-BODY
+
+
+
+	// Exit
 	return STATUS_SUCCESS;
 }
-
 
 /// <summary>
 /// Entry point.
@@ -75,11 +81,10 @@ INT main() {
 	
 	LPCSTR ServerName = NULL;
 	LPCSTR DomainName = NULL;
-	
 
 	// 1. Get domain controller information
 	NTSTATUS Status = STATUS_SUCCESS;
-	PDOMAIN_CONTROLLER_INFOW DCInformation = NULL;
+	PDOMAIN_CONTROLLER_INFOA DCInformation = NULL;
 	Status = GetDomainControllerInformation(
 		NULL,
 		DomainName,
@@ -87,38 +92,16 @@ INT main() {
 	);
 	if (!NT_SUCCESS(Status))
 		return EXIT_FAILURE;
-	wprintf(L"[>] Domain name      : %ws\r\n", DCInformation->DomainName);
-	wprintf(L"[>] Domain controller: %ws (%ws)\r\n",
+	printf("[>] Domain name      : %s\r\n", DCInformation->DomainName);
+	printf("[>] Domain controller: %s (%s)\r\n",
 		DCInformation->DomainControllerName,
 		DCInformation->DomainControllerAddress
 	);
 
 	// 2. Build AS-REQ with pre-auth
-	KERBEROS_AS_REQ Request = { 0x00 };
-	Request.pvno = 5;
-	Request.msg_type = KERBEROS_MESSAGE_TYPE_AS_REQ;
-
-	// ENC-TIMESTAMP 
-	//Request.padata[0x00].Type = KERBEROS_PDATA_TYPE_ENC_TIMESTAMP;
-	
 	LPSTR NtlmHash = "7FACDC498ED1680C4FD1448319A8C04F";
 	DWORD NtlmHashSize = strlen(NtlmHash);
-	PBYTE EncryptedTimestamp = NULL;
-	DWORD EncryptedTimestampSize = 0x00;
-
-	KerbGenerateSystemTimestampPAData(
-		NtlmHash,
-		NtlmHashSize,
-		&EncryptedTimestamp,
-		&EncryptedTimestampSize
-	);
-
-
-
-
-
-	// PAC_REQUEST
-	//Request.padata[0x01].Type = KERBEROS_PDATA_TYPE_PA_PAC_REQUEST; 
+	GenerateASRequest(NtlmHash, NtlmHashSize);
 
 
 	// x. Cleanup and exit
