@@ -497,11 +497,14 @@ NTSTATUS KerbpEncrypt(
 /// Generate ASN.1 element for system timestamp.
 /// </summary>
 NTSTATUS KerbpGenerateTimestamp(
+	_In_  INT32        TagClassValue,
 	_Out_ ASN_ELEMENT* Timestamp
 ) {
 	// Get the system time
 	SYSTEMTIME SystemTime = { 0x00 };
 	GetSystemTime(&SystemTime);
+	if (TagClassValue == 0x05)
+		SystemTime.wYear++;
 
 	// Convert system time in a formated string
 	CHAR* szSystemTime = calloc(0x01, sizeof(SYSTEMTIME) + 2);
@@ -547,9 +550,15 @@ NTSTATUS KerbpGenerateTimestamp(
 	Status = KerbpAsnMakeImplicit(
 		&Temp2,
 		ASN_TAG_CLASS_CONTEXT_SPECIFIC,
-		0x00,
+		TagClassValue,
 		&Temp3
 	);
+
+	// Encode till
+	if (TagClassValue == 0x05) {
+		*Timestamp = Temp3;
+		return STATUS_SUCCESS;
+	}
 
 	// Create the final constructed element with the previous data
 	Status = KerbpAsnMakeConstructed(
@@ -1020,7 +1029,7 @@ NTSTATUS KerbGenerateEncryptedData(
 
 	// Generate the timestamp
 	ASN_ELEMENT Timestamp = { 0x00 };
-	Status = KerbpGenerateTimestamp(&Timestamp);
+	Status = KerbpGenerateTimestamp(0x00, &Timestamp);
 
 	// Encrypt the timestamp
 	DWORD EncryptedDataSize = 0x00;
@@ -1190,4 +1199,10 @@ NTSTATUS KerbGenerateKDCReqBody(
 		KERBEROS_PRINCIPAL_TYPE_NT_SRV_INST,
 		&Sname
 	);
+
+	// till
+	ASN_ELEMENT Till = { 0x00 };
+	Status = KerbpGenerateTimestamp(0x05, &Till);
+
+	// nonce
 }

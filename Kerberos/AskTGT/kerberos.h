@@ -357,6 +357,7 @@ NTSTATUS KerbpEncrypt(
 );
 
 NTSTATUS KerbpGenerateTimestamp(
+    _In_  INT32        TagClassValue,
     _Out_ ASN_ELEMENT* Timestamp
 );
 
