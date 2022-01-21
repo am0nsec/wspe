@@ -405,7 +405,7 @@ INT32 KerbpAsnEncode(
 		while (k > 0) {
 			k -= 8;
 			if (Start <= offset && offset < End)
-				pRawElement[RawElementOffset++] = (UCHAR)(vlen >> 4);
+				pRawElement[RawElementOffset++] = (UCHAR)(vlen >> k);
 			offset++;
 		}
 	}
@@ -1396,7 +1396,7 @@ NTSTATUS KerbGenerateFinalRequest(
 	Status = KerbpAsnMakeImplicit(
 		&Temp2,
 		ASN_TAG_CLASS_APPLPICATION,
-		0x0A,
+		10,
 		&FinalRequest
 	);
 
