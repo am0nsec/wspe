@@ -18,6 +18,8 @@
 #define NT_SUCCESS(Status) (((NTSTATUS)(Status)) >= 0)
 #endif
 
+#define XLATE_UINT32(disp, x) (((ULONG32)disp & ((ULONG32)0xFF << (8 *(3 - x)))) >> (8 * (3 - x)))
+
 #define KERBEROS_KEY_USAGE_AS_REQ_PA_ENC_TIMESTAMP        1
 #define KERBEROS_KEY_USAGE_AS_REP_TGS_REP                 2
 #define KERBEROS_KEY_USAGE_AS_REP_EP_SESSION_KEY          3
@@ -105,6 +107,42 @@
 #define KERBEROS_ETYPE_SUBKEY_MATERIAL                 65
 #define KERBEROS_ETYPE_OLD_EXP                         -135
 
+#define KERBEROS_KDC_OPTION_VALIDATE               0x00000001
+#define KERBEROS_KDC_OPTION_RENEW                  0x00000002
+#define KERBEROS_KDC_OPTION_UNUSED29               0x00000004
+#define KERBEROS_KDC_OPTION_ENCTKTINSKEY           0x00000008
+#define KERBEROS_KDC_OPTION_RENEWABLEOK            0x00000010
+#define KERBEROS_KDC_OPTION_DISABLETRANSITEDCHECK  0x00000020
+#define KERBEROS_KDC_OPTION_UNUSED16               0x0000FFC0
+#define KERBEROS_KDC_OPTION_CONSTRAINED_DELEGATION 0x00020000
+#define KERBEROS_KDC_OPTION_CANONICALIZE           0x00010000
+#define KERBEROS_KDC_OPTION_CNAMEINADDLTKT         0x00004000
+#define KERBEROS_KDC_OPTION_OK_AS_DELEGATE         0x00040000
+#define KERBEROS_KDC_OPTION_REQUEST_ANONYMOUS      0x00008000
+#define KERBEROS_KDC_OPTION_UNUSED12               0x00080000
+#define KERBEROS_KDC_OPTION_OPTHARDWAREAUTH        0x00100000
+#define KERBEROS_KDC_OPTION_PREAUTHENT             0x00200000
+#define KERBEROS_KDC_OPTION_INITIAL                0x00400000
+#define KERBEROS_KDC_OPTION_RENEWABLE              0x00800000
+#define KERBEROS_KDC_OPTION_UNUSED7                0x01000000
+#define KERBEROS_KDC_OPTION_POSTDATED              0x02000000
+#define KERBEROS_KDC_OPTION_ALLOWPOSTDATE          0x04000000
+#define KERBEROS_KDC_OPTION_PROXY                  0x08000000
+#define KERBEROS_KDC_OPTION_PROXIABLE              0x10000000
+#define KERBEROS_KDC_OPTION_FORWARDED              0x20000000
+#define KERBEROS_KDC_OPTION_FORWARDABLE            0x40000000
+#define KERBEROS_KDC_OPTION_RESERVED               0x80000000
+
+#define KERBEROS_PRINCIPAL_TYPE_NT_UNKNOWN        0
+#define KERBEROS_PRINCIPAL_TYPE_NT_PRINCIPAL      1
+#define KERBEROS_PRINCIPAL_TYPE_NT_SRV_INST       2
+#define KERBEROS_PRINCIPAL_TYPE_NT_SRV_HST        3
+#define KERBEROS_PRINCIPAL_TYPE_NT_SRV_XHST       4
+#define KERBEROS_PRINCIPAL_TYPE_NT_UID            5
+#define KERBEROS_PRINCIPAL_TYPE_NT_X500_PRINCIPAL 6
+#define KERBEROS_PRINCIPAL_TYPE_NT_SMTP_NAME      7
+#define KERBEROS_PRINCIPAL_TYPE_NT_ENTERPRISE     10
+
 // ASN.1 Tag identifiers
 #define ASN_TAG_INTEGER            0x02
 #define ASN_TAG_BIT_STRING         0x03
@@ -120,6 +158,12 @@
 #define ASN_TAG_IA5_STRING         0x16
 #define ASN_TAG_UTC_TIME           0x17
 #define ASN_TAG_GENERALIZED_TIME   0x18
+#define ASN_TAG_GRAPHIC_STRING     0x19
+#define ASN_TAG_VISIBLE_STRING     0x1A
+#define ASN_TAG_GENERAL_STRING     0x1B
+#define ASN_TAG_UNIVERSAL_STRING   0x1C
+#define ASN_TAG_CHARACTER_STRING   0x1D
+#define ASN_TAG_BMP_STRING         0x1E
 
 // ASN.1 Tag classes
 #define ASN_TAG_CLASS_UNIVERSAL        0
@@ -144,7 +188,6 @@ typedef struct _ASN_ELEMENT {
     INT32   ObjectOffset; // Offset of the objetc buffer
     INT32   ValueOffset;  // Offset of the value
     INT32   ValueLength;  // Length of the value held by the object
-    BOOLEAN Encoded;      // Whether the object has been already encoded.
 }ASN_ELEMENT, *PASN_ELEMENT;
 
 ///EncryptedData::= SEQUENCE {
@@ -224,6 +267,12 @@ NTSTATUS KerbGenerateEncryptedData(
 );
 
 NTSTATUS KerbGeneratePac(
+    _Out_ ASN_ELEMENT* pElement
+);
+
+NTSTATUS KerbGenerateKDCReqBody(
+    _In_  PBYTE        DomainName,
+    _In_  PBYTE        SecurityPrincipal,
     _Out_ ASN_ELEMENT* pElement
 );
 

@@ -50,7 +50,11 @@ NTSTATUS GetDomainControllerInformation(
 
 NTSTATUS GenerateASRequest(
 	_In_ PCSTR Key,
-	_In_ DWORD KeySize
+	_In_ DWORD KeySize,
+	_In_ PCSTR DomainName,
+	_In_ DWORD DomainNameSize,
+	_In_ PCSTR SecurityPrincipal,
+	_In_ DWORD SecurityPrincipalSize
 ) {
 	// 1. PVNOP and MSG-TYPE
 	ASN_ELEMENT Pvno = { 0x00 };
@@ -66,7 +70,12 @@ NTSTATUS GenerateASRequest(
 	KerbGeneratePac(&Pac);
 
 	// 4 Generate REQ-BODY
-
+	ASN_ELEMENT ReqBody = { 0x00 };
+	KerbGenerateKDCReqBody(
+		DomainName,
+		SecurityPrincipal,
+		&ReqBody
+	);
 
 
 	// Exit
@@ -99,9 +108,18 @@ INT main() {
 	);
 
 	// 2. Build AS-REQ with pre-auth
+	LPSTR SecurityPrincipal = "Administrator";
 	LPSTR NtlmHash = "7FACDC498ED1680C4FD1448319A8C04F";
 	DWORD NtlmHashSize = strlen(NtlmHash);
-	GenerateASRequest(NtlmHash, NtlmHashSize);
+
+	GenerateASRequest(
+		NtlmHash,
+		NtlmHashSize,
+		DCInformation->DomainName,
+		strlen(DCInformation->DomainName),
+		SecurityPrincipal,
+		strlen(SecurityPrincipal)
+	);
 
 
 	// x. Cleanup and exit

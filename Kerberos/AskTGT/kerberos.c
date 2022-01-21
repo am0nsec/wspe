@@ -23,6 +23,63 @@ NTSTATUS KerbpFormatTimestamp(
 }
 
 /// <summary>
+/// Get code point.
+/// </summary>
+INT32 KerbpGetCodePoint(
+	_In_    PBYTE  String,
+	_In_    INT32  StringSize,
+	_Inout_ INT32* Offset
+) {
+	INT32 c = String[(*Offset)++];
+	if (c >= 0xD800 && c < 0xDC00 && *Offset < StringSize) {
+		INT32 d = String[*Offset];
+		if (d >= 0xDC00 && d < 0xE000) {
+			c = ((c & 0x3FF) << 10) + (d & 0x3FF) + 0x10000;
+			(*Offset)++;
+		}
+	}
+	return c;
+}
+
+/// <summary>
+/// UTF8 encoding of a string.
+/// </summary>
+NTSTATUS KerbpEncodeUTF8(
+	_In_  PBYTE  StringIn,
+	_In_  INT32  StringInSize,
+	_Out_ PBYTE* StringOut,
+	_Out_ INT32* StringOutSize
+) {
+	// Allocate memory
+	*StringOut = calloc(0x1, (StringInSize * 4) + sizeof(WCHAR));
+	PBYTE dst = *StringOut;
+
+	while (*StringOutSize < StringInSize) {
+		INT32 cp = KerbpGetCodePoint(StringIn, StringInSize, StringOutSize);
+		if (cp < 0x80) {
+			*dst++ = (UCHAR)cp;
+		}
+		else if (cp < 0x800) {
+			*dst++ = (UCHAR)(0xC0 + (cp >> 6));
+			*dst++ = (UCHAR)(0x80 + (cp & 63));
+		}
+		else if (cp < 0x10000) {
+			*dst++ = (UCHAR)(0xE0 + (cp >> 12));
+			*dst++ = (UCHAR)(0x80 + ((cp >> 6) & 63));
+			*dst++ = (UCHAR)(0x80 + (cp & 63));
+		}
+		else {
+			*dst++ = (UCHAR)(0xF0 + (cp >> 18));
+			*dst++ = (UCHAR)(0x80 + ((cp >> 12) & 63));
+			*dst++ = (UCHAR)(0x80 + ((cp >> 6) & 63));
+			*dst++ = (UCHAR)(0x80 + (cp & 63));
+		}
+	}
+
+	return STATUS_SUCCESS;
+}
+
+/// <summary>
 /// Get the length associated with an ASN.1 element tag
 /// </summary>
 INT32 KerbpGetAsnTagLength(
@@ -637,6 +694,170 @@ NTSTATUS KerbpEncodeEncryptedData(
 }
 
 /// <summary>
+/// Generate kdc-options ASN.1 element.
+/// </summary>
+NTSTATUS KerbpGenerateKdcOptions(
+	_In_  ULONG        Options,
+	_Out_ ASN_ELEMENT* pElement
+) {
+	NTSTATUS Status = STATUS_SUCCESS;
+
+	// Convert the options to little endian
+	UCHAR Bytes[0x05] = { 0x00 };
+	Bytes[0x01] = XLATE_UINT32(Options, 0x00);
+	Bytes[0x02] = XLATE_UINT32(Options, 0x01);
+	Bytes[0x03] = XLATE_UINT32(Options, 0x02);
+	Bytes[0x04] = XLATE_UINT32(Options, 0x03);
+
+	// Temporary elements
+	ASN_ELEMENT Temp1 = { 0x00 };
+	ASN_ELEMENT Temp2 = { 0x00 };
+
+	// Get the sequence
+	Status = KerbpAsnMakePrimitive(
+		&Temp1,
+		ASN_TAG_CLASS_UNIVERSAL,
+		ASN_TAG_BIT_STRING,
+		Bytes,
+		0x00,
+		0x05
+	);
+	Status = KerbpAsnMakeConstructed(
+		&Temp2,
+		ASN_TAG_CLASS_UNIVERSAL,
+		ASN_TAG_SEQUENCE,
+		&Temp1,
+		0x01
+	);
+	Status = KerbpAsnMakeImplicit(
+		&Temp2,
+		ASN_TAG_CLASS_CONTEXT_SPECIFIC,
+		0x00,
+		pElement
+	);
+
+	return Status;
+}
+
+/// <summary>
+/// Generate cname ASN.1 element.
+/// </summary>
+NTSTATUS KerbpGenerateCname(
+	_In_  PCSTR        SecurityPrincipal,
+	_In_  INT32        SecurityPrincipalSize,
+	_Out_ ASN_ELEMENT* pElement
+) {
+	NTSTATUS Status = STATUS_SUCCESS;
+
+	// Temporary elements
+	ASN_ELEMENT Temp1 = { 0x00 };
+	ASN_ELEMENT Temp2 = { 0x00 };
+	
+	// name-type
+	ASN_ELEMENT NameType = { 0x0 };
+	Status = KerbpAsnMakeInteger(&Temp1, KERBEROS_PRINCIPAL_TYPE_NT_PRINCIPAL);
+	Status = KerbpAsnMakeConstructed(
+		&Temp2,
+		ASN_TAG_CLASS_UNIVERSAL,
+		ASN_TAG_SEQUENCE,
+		&Temp1,
+		0x01
+	);
+	Status = KerbpAsnMakeImplicit(
+		&Temp2,
+		ASN_TAG_CLASS_CONTEXT_SPECIFIC,
+		0x00,
+		&NameType
+	);
+
+	// Reset
+	RtlZeroMemory(&Temp1, sizeof(ASN_ELEMENT));
+	RtlZeroMemory(&Temp2, sizeof(ASN_ELEMENT));
+
+	// name-string
+	ASN_ELEMENT NameString = { 0x00 };
+
+	PBYTE EncodeSecurityPrincipal = NULL;
+	INT32 EncodeSecurityPrincipalSize = 0x00;
+	Status = KerbpEncodeUTF8(
+		SecurityPrincipal,
+		SecurityPrincipalSize,
+		&EncodeSecurityPrincipal,
+		&EncodeSecurityPrincipalSize
+	);
+	Status = KerbpAsnMakePrimitive(
+		&Temp1,
+		ASN_TAG_CLASS_UNIVERSAL,
+		ASN_TAG_UTF8STRING,
+		EncodeSecurityPrincipal,
+		0x00,
+		EncodeSecurityPrincipalSize
+	);
+	Status = KerbpAsnMakeImplicit(
+		&Temp1,
+		ASN_TAG_CLASS_UNIVERSAL,
+		ASN_TAG_GENERAL_STRING,
+		&NameString
+	);
+
+	// Reset
+	RtlZeroMemory(&Temp1, sizeof(ASN_ELEMENT));
+	RtlZeroMemory(&Temp2, sizeof(ASN_ELEMENT));
+
+	// name-string sequence
+	Status = KerbpAsnMakeConstructed(
+		&Temp1,
+		ASN_TAG_CLASS_UNIVERSAL,
+		ASN_TAG_SEQUENCE,
+		&NameString,
+		0x01
+	);
+	Status = KerbpAsnMakeConstructed(
+		&Temp2,
+		ASN_TAG_CLASS_UNIVERSAL,
+		ASN_TAG_SEQUENCE,
+		&Temp1,
+		0x01
+	);
+	RtlZeroMemory(&NameString, sizeof(ASN_ELEMENT));
+	Status = KerbpAsnMakeImplicit(
+		&Temp2,
+		ASN_TAG_CLASS_CONTEXT_SPECIFIC,
+		0x01,
+		&NameString
+	);
+
+	// Reset
+	RtlZeroMemory(&Temp1, sizeof(ASN_ELEMENT));
+	RtlZeroMemory(&Temp2, sizeof(ASN_ELEMENT));
+
+	// Final Sequence
+	ASN_ELEMENT Elements[0x02] = { NameType, NameString };
+	Status = KerbpAsnMakeConstructed(
+		&Temp1,
+		ASN_TAG_CLASS_UNIVERSAL,
+		ASN_TAG_SEQUENCE,
+		Elements,
+		0x02
+	);
+	Status = KerbpAsnMakeConstructed(
+		&Temp2,
+		ASN_TAG_CLASS_UNIVERSAL,
+		ASN_TAG_SEQUENCE,
+		&Temp1,
+		0x01
+	);
+
+	return KerbpAsnMakeImplicit(
+		&Temp2,
+		ASN_TAG_CLASS_CONTEXT_SPECIFIC,
+		0x01,
+		pElement
+	);
+}
+
+
+/// <summary>
 /// Generate ASN.1 elements for pvno and msg-type
 /// </summary>
 NTSTATUS KerbGeneratePvnoAndType(
@@ -847,4 +1068,31 @@ NTSTATUS KerbGeneratePac(
 		Elements,
 		0x02
 	);
+}
+
+/// <summary>
+/// Generate the KDC-REQ-BODY ASN.1 element.
+/// </summary>
+NTSTATUS KerbGenerateKDCReqBody(
+	_In_  PBYTE        DomainName,
+	_In_  PBYTE        SecurityPrincipal,
+	_Out_ ASN_ELEMENT* pElement
+) {
+	NTSTATUS Status = STATUS_SUCCESS;
+
+	// kdc-options
+	ASN_ELEMENT KdcOptions = { 0x00 };
+	Status = KerbpGenerateKdcOptions(
+		(KERBEROS_KDC_OPTION_FORWARDABLE | KERBEROS_KDC_OPTION_RENEWABLE | KERBEROS_KDC_OPTION_RENEWABLEOK),
+		&KdcOptions
+	);
+
+	// cname
+	ASN_ELEMENT Cname = { 0x00 };
+	Status = KerbpGenerateCname(
+		SecurityPrincipal,
+		strlen(SecurityPrincipal),
+		&Cname
+	);
+
 }
