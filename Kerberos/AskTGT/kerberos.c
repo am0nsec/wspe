@@ -264,8 +264,6 @@ NTSTATUS KerbpAsnMakeImplicit(
 	return STATUS_SUCCESS;
 }
 
-
-
 /// <summary>
 /// Generate valid ASN.1 integer element.
 /// </summary>
@@ -1164,7 +1162,7 @@ NTSTATUS KerbGenerateEncryptedData(
 
 	// Create sequence for both element.
 	ASN_ELEMENT Elements[0x02] = { PdataType, PdataValue };
-	return KerbpAsnMakeConstructed(
+	Status = KerbpAsnMakeConstructed(
 		pElement,
 		ASN_TAG_CLASS_UNIVERSAL,
 		ASN_TAG_SEQUENCE,
@@ -1305,4 +1303,104 @@ NTSTATUS KerbGenerateKDCReqBody(
 		Elements,
 		0x07
 	);
+}
+
+/// <summary>
+/// Generate the final ASN.1 element.
+/// </summary>
+NTSTATUS KerbGenerateFinalRequest(
+	_In_  ASN_ELEMENT* Pvno,
+	_In_  ASN_ELEMENT* MessageType,
+	_In_  ASN_ELEMENT* EncryptedData,
+	_In_  ASN_ELEMENT* Pac,
+	_In_  ASN_ELEMENT* Body,
+	_Out_ PBYTE*       Data,
+	_Out_ INT32*       DataSize
+) {
+	NTSTATUS Status = STATUS_SUCCESS;
+
+	// Temporary elements
+	ASN_ELEMENT Temp1 = { 0x00 };
+	ASN_ELEMENT Temp2 = { 0x00 };
+
+	// Final body
+	ASN_ELEMENT FinalBody = { 0x00 };
+	Status = KerbpAsnMakeConstructed(
+		&Temp1,
+		ASN_TAG_CLASS_UNIVERSAL,
+		ASN_TAG_SEQUENCE,
+		Body,
+		0x01
+	);
+	Status = KerbpAsnMakeImplicit(
+		&Temp1,
+		ASN_TAG_CLASS_CONTEXT_SPECIFIC,
+		0x04,
+		&FinalBody
+	);
+	RtlZeroMemory(&Temp1, sizeof(ASN_ELEMENT));
+
+	// Final padata
+	ASN_ELEMENT FinalPadata = { 0x00 };
+	ASN_ELEMENT Padata[0x02] = { *EncryptedData, *Pac };
+	Status = KerbpAsnMakeConstructed(
+		&Temp1,
+		ASN_TAG_CLASS_UNIVERSAL,
+		ASN_TAG_SEQUENCE,
+		Padata,
+		0x02
+	);
+	Status = KerbpAsnMakeConstructed(
+		&Temp2,
+		ASN_TAG_CLASS_UNIVERSAL,
+		ASN_TAG_SEQUENCE,
+		&Temp1,
+		0x01
+	);
+	Status = KerbpAsnMakeImplicit(
+		&Temp2,
+		ASN_TAG_CLASS_CONTEXT_SPECIFIC,
+		0x03,
+		&FinalPadata
+	);
+	RtlZeroMemory(&Temp1, sizeof(ASN_ELEMENT));
+	RtlZeroMemory(&Temp2, sizeof(ASN_ELEMENT));
+
+	// Encode everything
+	ASN_ELEMENT Elements[0x04] = { *Pvno, *MessageType, FinalPadata, FinalBody };
+	Status = KerbpAsnMakeConstructed(
+		&Temp1,
+		ASN_TAG_CLASS_UNIVERSAL,
+		ASN_TAG_SEQUENCE,
+		Elements,
+		0x04
+	);
+
+	// Final request
+	ASN_ELEMENT FinalRequest = { 0x00 };
+	Status = KerbpAsnMakeConstructed(
+		&Temp2,
+		ASN_TAG_CLASS_UNIVERSAL,
+		ASN_TAG_SEQUENCE,
+		&Temp1,
+		0x01
+	);
+	Status = KerbpAsnMakeImplicit(
+		&Temp2,
+		ASN_TAG_CLASS_APPLPICATION,
+		0x0A,
+		&FinalRequest
+	);
+
+	// Encode everything to a byte array
+	*Data = calloc(0x01, FinalRequest.ObjectLength);
+	*DataSize = KerbpAsnEncode(
+		&FinalRequest,
+		0x00,
+		FinalRequest.ObjectLength + 0x10,
+		0x00,
+		*Data
+	);
+
+	return STATUS_SUCCESS;
 }

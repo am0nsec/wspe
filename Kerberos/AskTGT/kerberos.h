@@ -276,6 +276,16 @@ NTSTATUS KerbGenerateKDCReqBody(
     _Out_ ASN_ELEMENT* pElement
 );
 
+NTSTATUS KerbGenerateFinalRequest(
+    _In_  ASN_ELEMENT* Pvno,
+    _In_  ASN_ELEMENT* MessageType,
+    _In_  ASN_ELEMENT* EncryptedData,
+    _In_  ASN_ELEMENT* Pac,
+    _In_  ASN_ELEMENT* Body,
+    _Out_ PBYTE*       Data,
+    _Out_ INT32*       DataSize
+);
+
 //-------------------------------------------------------------------------------------------------//
 // Private functions
 //-------------------------------------------------------------------------------------------------/
