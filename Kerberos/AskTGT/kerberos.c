@@ -172,11 +172,14 @@ NTSTATUS KerbpAsnMakePrimitive(
 		return STATUS_UNSUCCESSFUL;
 
 	RtlZeroMemory(pElement, sizeof(ASN_ELEMENT));
-	pElement->ObjectBuffer = pBuffer;
 	pElement->ObjectLength = -1;
 	pElement->ValueLength = Length;
 	pElement->TagValue = TagValue;
 	pElement->TagClass = TagClass;
+
+	// Copy buffer
+	pElement->ObjectBuffer = calloc(0x01, Length);
+	RtlCopyMemory(pElement->ObjectBuffer, pBuffer, Length);
 
 	// Dummy call to update the internal lenght
 	KerbpAsnGetEffectiveEncodedLength(pElement);
@@ -856,9 +859,14 @@ NTSTATUS KerbpGeneratePrincipalName(
 	RtlZeroMemory(&Temp1, sizeof(ASN_ELEMENT));
 
 	// name-string sequence
-	ASN_ELEMENT Strings[0x02] = { Temp2 };
-	if (Type != KERBEROS_PRINCIPAL_TYPE_NT_PRINCIPAL)
-		Strings[0x01] = Temp3;
+	ASN_ELEMENT Strings[0x02] = { 0x00 };
+	if (Type != KERBEROS_PRINCIPAL_TYPE_NT_PRINCIPAL) {
+		Strings[0x00] = Temp3;
+		Strings[0x01] = Temp2;
+	}
+	else {
+		Strings[0x00] = Temp2;
+	}
 
 	Status = KerbpAsnMakeConstructed(
 		&Temp1,
@@ -1205,7 +1213,7 @@ NTSTATUS KerbGeneratePac(
 
 	// Generate the PAC request.
 	ASN_ELEMENT PdataValue = { 0x00 };
-	PBYTE Blob[0x07] = { 0x30, 0x05, 0xa0, 0x03, 0x01, 0x01, 0x01 };
+	BYTE Blob[0x07] = { 0x30, 0x05, 0xa0, 0x03, 0x01, 0x01, 0x01 };
 	Status = KerbpAsnMakePrimitive(
 		&Temp1,
 		ASN_TAG_CLASS_UNIVERSAL,

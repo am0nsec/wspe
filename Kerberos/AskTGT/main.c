@@ -1,7 +1,7 @@
-#define _WINSOCK_DEPRECATED_NO_WARNINGS
-#include <WinSock2.h>
 
-#include <Windows.h>
+#include "socket.h"
+
+//#include <Windows.h>
 #include <stdio.h>
 #include <Lm.h>
 #include <DsGetDC.h>
@@ -10,7 +10,6 @@
 
 #include "kerberos.h"
 
-#pragma comment(lib, "WS2_32.lib")
 #pragma comment(lib, "NetApi32.lib")
 #pragma comment(lib, "ntdll.lib")
 #pragma comment(lib, "netapi32.lib")
@@ -45,9 +44,16 @@ NTSTATUS GetDomainControllerInformation(
 
 	RtlCopyMemory((*DCInformation)->DomainControllerName, (*DCInformation)->DomainControllerName + 2, Size1 - 2);
 	RtlCopyMemory((*DCInformation)->DomainControllerAddress, (*DCInformation)->DomainControllerAddress + 2, Size2 - 2);
+
+	(*DCInformation)->DomainControllerName[Size1 - 2] = 0x00;
+	(*DCInformation)->DomainControllerAddress[Size2 - 2] = 0x00;
+
 	return STATUS_SUCCESS;
 }
 
+/// <summary>
+/// Generate the final AS-REQ
+/// </summary>
 NTSTATUS GenerateASRequest(
 	_In_  PCSTR  Key,
 	_In_  PCSTR  DomainName,
@@ -132,6 +138,16 @@ INT main() {
 		&RequestSize
 	);
 
+	// 3. Send the data
+	PBYTE Response     = NULL;
+	INT32 ResponseSize = 0x00;
+	SockSendKerberosASRequest(
+		DCInformation->DomainControllerAddress,
+		Request,
+		RequestSize,
+		&Response,
+		&ResponseSize
+	);
 
 	// x. Cleanup and exit
 exit:

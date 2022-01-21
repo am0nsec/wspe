@@ -9,7 +9,10 @@
 add_executable(pkasktgt
 	"main.c"
 	"kerberos.c"
+	"socket.c"
+
 	"kerberos.h"
+	"socket.h"
 )
 
 set_property(TARGET pkasktgt
