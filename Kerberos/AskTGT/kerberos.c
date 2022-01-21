@@ -264,6 +264,8 @@ NTSTATUS KerbpAsnMakeImplicit(
 	return STATUS_SUCCESS;
 }
 
+
+
 /// <summary>
 /// Generate valid ASN.1 integer element.
 /// </summary>
@@ -272,13 +274,26 @@ NTSTATUS KerbpAsnMakeInteger(
 	_In_    LONG         Value
 ) {
 	INT32 k = 1;
-	for (ULONG w = (ULONG)Value; w >= 0x80; w >>= 8, k++);
+	INT32 l = k;
+	PBYTE v = NULL;
 
-	// Allocate memory
-	LPBYTE v = calloc(1, k);
-	INT32 Length = k;
-	for (ULONG w = (ULONG)Value; k > 0x00; w >>= 8) {
-		v[--k] = (UCHAR)w;
+	if (Value >= 0x00) {
+		for (ULONG w = (ULONG)Value; w >= 0x80; w >>= 8, k++);
+
+		// Allocate memory
+		v = calloc(1, k);
+		l = k;
+		for (ULONG w = (ULONG)Value; k > 0x00; w >>= 8)
+			v[--k] = (UCHAR)w;
+	}
+	else {
+		for (LONG w = Value; w <= -(LONG)0x80; w >>= 8, k++);
+
+		// Allocate memory
+		v = calloc(1, k);
+		l = k;
+		for (LONG w = Value; k > 0x00; w >>= 8)
+			v[--k] = (UCHAR)w;
 	}
 
 	return KerbpAsnMakePrimitive(
@@ -287,7 +302,7 @@ NTSTATUS KerbpAsnMakeInteger(
 		ASN_TAG_INTEGER,
 		v,
 		0x00,
-		Length
+		l
 	);
 }
 
@@ -945,6 +960,75 @@ NTSTATUS KerbpGenerateRealm(
 }
 
 /// <summary>
+/// Generate nonce ASN.1 element.
+/// </summary>
+NTSTATUS KerbpGenerateNonce(
+	_Out_ ASN_ELEMENT* pElement
+) {
+	NTSTATUS Status = STATUS_SUCCESS;
+
+	// Temporary elements
+	ASN_ELEMENT Temp1 = { 0x00 };
+	ASN_ELEMENT Temp2 = { 0x00 };
+	INT32 Random = (INT32)__rdtsc();
+
+	Status = KerbpAsnMakeInteger(&Temp1, Random);
+	Status = KerbpAsnMakeConstructed(
+		&Temp2,
+		ASN_TAG_CLASS_UNIVERSAL,
+		ASN_TAG_SEQUENCE,
+		&Temp1,
+		0x01
+	);
+	return KerbpAsnMakeImplicit(
+		&Temp2,
+		ASN_TAG_CLASS_CONTEXT_SPECIFIC,
+		0x07,
+		pElement
+	);
+}
+
+/// <summary>
+/// Generate etype ASN.1 element.
+/// </summary>
+NTSTATUS KerbpGenerateEtype(
+	_Out_ ASN_ELEMENT* pElement
+) {
+	NTSTATUS Status = STATUS_SUCCESS;
+
+	// Temporary elements
+	ASN_ELEMENT Temp1 = { 0x00 };
+	ASN_ELEMENT Temp2 = { 0x00 };
+
+	Status = KerbpAsnMakeInteger(&Temp1, KERBEROS_ETYPE_RC4_HMAC);
+	Status = KerbpAsnMakeConstructed(
+		&Temp2,
+		ASN_TAG_CLASS_UNIVERSAL,
+		ASN_TAG_SEQUENCE,
+		&Temp1,
+		0x01
+	);
+
+	// Reset 
+	RtlZeroMemory(&Temp1, sizeof(ASN_ELEMENT));
+	Status = KerbpAsnMakeConstructed(
+		&Temp1,
+		ASN_TAG_CLASS_UNIVERSAL,
+		ASN_TAG_SEQUENCE,
+		&Temp2,
+		0x01
+	);
+
+	// Final sequence
+	return KerbpAsnMakeImplicit(
+		&Temp1,
+		ASN_TAG_CLASS_CONTEXT_SPECIFIC,
+		0x08,
+		pElement
+	);
+}
+
+/// <summary>
 /// Generate ASN.1 elements for pvno and msg-type
 /// </summary>
 NTSTATUS KerbGeneratePvnoAndType(
@@ -1205,4 +1289,20 @@ NTSTATUS KerbGenerateKDCReqBody(
 	Status = KerbpGenerateTimestamp(0x05, &Till);
 
 	// nonce
+	ASN_ELEMENT Nonce = { 0x00 };
+	Status = KerbpGenerateNonce(&Nonce);
+
+	// etype
+	ASN_ELEMENT Etype = { 0x00 };
+	Status = KerbpGenerateEtype(&Etype);
+
+	// Make sequence with everything from above
+	ASN_ELEMENT Elements[0x07] = { KdcOptions, Cname, Realm, Sname, Till, Nonce, Etype };
+	return KerbpAsnMakeConstructed(
+		pElement,
+		ASN_TAG_CLASS_UNIVERSAL,
+		ASN_TAG_SEQUENCE,
+		Elements,
+		0x07
+	);
 }

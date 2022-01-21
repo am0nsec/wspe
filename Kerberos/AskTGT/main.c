@@ -77,6 +77,8 @@ NTSTATUS GenerateASRequest(
 		&ReqBody
 	);
 
+	// Encode everything
+
 
 	// Exit
 	return STATUS_SUCCESS;
