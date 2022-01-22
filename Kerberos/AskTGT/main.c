@@ -51,6 +51,22 @@ NTSTATUS GetDomainControllerInformation(
 	return STATUS_SUCCESS;
 }
 
+NTSTATUS HexStringToHex(
+	_In_  PCSTR  BufferIn,
+	_Out_ PBYTE* BufferOut,
+	_Out_ INT32* BufferOutSize
+) {
+	*BufferOutSize = 0x10;
+	*BufferOut = calloc(0x01, 0x11);
+
+	UINT32 b = 0x00;
+	for (INT32 cx = 0x00; cx < 0x10; cx++) {
+		sscanf(BufferIn + (2 * cx), "%02X", &b);
+		(*BufferOut)[cx] = (UCHAR)b;
+	}
+	(*BufferOut)[0x10] = 0x00;
+}
+
 /// <summary>
 /// Generate the final AS-REQ
 /// </summary>
@@ -124,14 +140,20 @@ INT main() {
 		DCInformation->DomainControllerAddress
 	);
 
+	// Convert the NTLM to byte array
+	LPSTR NtlmHash = "7FACDC498ED1680C4FD1448319A8C04F";
+	PBYTE NtlmHashArray = NULL;
+	INT32 NtlmHashArraySize = NULL;
+	HexStringToHex(NtlmHash, &NtlmHashArray, &NtlmHashArraySize);
+
 	// 2. Build AS-REQ with pre-auth
 	LPSTR SecurityPrincipal = "Administrator";
-	LPSTR NtlmHash = "7FACDC498ED1680C4FD1448319A8C04F";
+
 
 	PBYTE Request     = NULL;
 	INT32 RequestSize = 0x00;
 	GenerateASRequest(
-		NtlmHash,
+		NtlmHashArray,
 		DCInformation->DomainName,
 		SecurityPrincipal,
 		&Request,
