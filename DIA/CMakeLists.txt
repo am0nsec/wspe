@@ -1,5 +1,5 @@
 # @file        CMakeLists.txt
-# @data        12/06/2022
+# @data        13/06/2022
 # @author      Paul L. (@am0nsec)
 # @version     1.0
 # @brief       Microsoft Debug Interface Access (DIA) CMake configuration file.
@@ -13,7 +13,8 @@ add_executable(dia-dump
 	"src/main.c"
 	"src/callback.c"
 	"src/interface.c"
- "inc/dirutil.h" "src/dirutil.c")
+	"src/dirutil.c"
+)
 
 # Add all post-build commands
 add_custom_command(
