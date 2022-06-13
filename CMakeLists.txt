@@ -25,3 +25,6 @@ add_subdirectory(Office/outlook)
 
 # Windows Defender
 add_subdirectory(Defender/ExclusionLists)
+
+# Microsoft Debug Interface Access (DIA)
+add_subdirectory(DIA)
